@@ -1,0 +1,18 @@
+bin/
+build/
+tmp/
+trash/
+.env/
+
+###################
+# Misc
+.DS_Store
+
+# Editor directories and files
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
