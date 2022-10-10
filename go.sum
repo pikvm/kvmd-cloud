@@ -231,6 +231,8 @@ github.com/ugorji/go/codec v1.2.7/go.mod h1:WGN1fab3R1fzQlVQTkfxVtIBhWDRqOviHU95
 github.com/x-cray/logrus-prefixed-formatter v0.5.2 h1:00txxvfBM9muc0jiLIEAkAcIMJzfthRT6usrui8uGmg=
 github.com/xornet-sl/gjrpc v0.0.0-20211025131622-905d2a6e29c5 h1:M7tEk3i6OxXGqtzYUpZbLIx4nakeqTUSna7unDp961Y=
 github.com/xornet-sl/gjrpc v0.0.0-20211025131622-905d2a6e29c5/go.mod h1:N/lGSc4oG3GVB9TNnnGW6Te9yD7ozROlHoSwsYsEmD8=
+github.com/xornet-sl/xcommon v0.0.0-20221010170557-45d6e739d7c7 h1:aWhx9y+zGw60M2CmJmt6YSlhynPquqR0wY15oAATvsw=
+github.com/xornet-sl/xcommon v0.0.0-20221010170557-45d6e739d7c7/go.mod h1:fhyaJkWtn3PYbxLbGcqEfUEuiBR3NefK95ibpOUXktI=
 github.com/yuin/goldmark v1.1.25/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.1.32/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=

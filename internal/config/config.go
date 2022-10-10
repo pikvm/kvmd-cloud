@@ -3,9 +3,10 @@ package config
 import (
 	"encoding/json"
 	"fmt"
-	"xcommon"
 
-	"github.com/pikvm/kvmd-cloud-agent/internal/config/vars"
+	"github.com/xornet-sl/xcommon"
+
+	"github.com/pikvm/kvmd-cloud/internal/config/vars"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -19,6 +20,8 @@ type Config struct {
 		File  string `json:"file"`
 		Trace bool   `json:"trace"`
 	} `json:"log"`
+	// TODO: tmp settings
+	ProxyAddress string `json:"proxyAddress"`
 }
 
 var DefaultConfig = map[string]interface{}{

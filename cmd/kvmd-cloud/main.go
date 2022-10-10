@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -10,20 +11,28 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/pikvm/kvmd-cloud-agent/internal/config"
-	"github.com/pikvm/kvmd-cloud-agent/internal/config/vars"
-	ctlserver "github.com/pikvm/kvmd-cloud-agent/internal/ctl/ctlServer"
-	"github.com/pikvm/kvmd-cloud-agent/internal/routing"
+	"github.com/pikvm/kvmd-cloud/internal/config"
+	"github.com/pikvm/kvmd-cloud/internal/config/vars"
+	ctlserver "github.com/pikvm/kvmd-cloud/internal/ctl/ctlServer"
+	"github.com/pikvm/kvmd-cloud/internal/routing"
 )
 
 func root(rootCmd *cobra.Command, args []string) error {
 	group, ctx := errgroup.WithContext(rootCmd.Context())
 
 	group.Go(func() error {
-		return ctlserver.RunServer(ctx)
+		err := ctlserver.RunServer(ctx)
+		if err != nil {
+			err = fmt.Errorf("unable to launch ctl server: %w", err)
+		}
+		return err
 	})
 	group.Go(func() error {
-		return routing.Serve(ctx)
+		err := routing.Serve(ctx)
+		if err != nil {
+			err = fmt.Errorf("unable to launch routing server: %w", err)
+		}
+		return err
 	})
 
 	return group.Wait()

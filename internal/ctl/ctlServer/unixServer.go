@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/pikvm/kvmd-cloud-agent/internal/config"
-	"github.com/pikvm/kvmd-cloud-agent/internal/ctl"
+	"github.com/pikvm/kvmd-cloud/internal/config"
+	"github.com/pikvm/kvmd-cloud/internal/ctl"
 	log "github.com/sirupsen/logrus"
 	ginlogrus "github.com/toorop/gin-logrus"
 )

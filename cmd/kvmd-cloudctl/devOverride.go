@@ -3,7 +3,7 @@
 package main
 
 import (
-	"github.com/pikvm/kvmd-cloud-agent/internal/config"
+	"github.com/pikvm/kvmd-cloud/internal/config"
 )
 
 func init() {

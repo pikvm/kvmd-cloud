@@ -1,8 +1,6 @@
-module github.com/pikvm/kvmd-cloud-agent
+module github.com/pikvm/kvmd-cloud
 
 go 1.18
-
-replace xcommon => ../xcommon
 
 require (
 	github.com/gin-gonic/gin v1.8.1
@@ -10,8 +8,8 @@ require (
 	github.com/spf13/cobra v1.5.0
 	github.com/spf13/pflag v1.0.5
 	github.com/toorop/gin-logrus v0.0.0-20210225092905-2c785434f26f
+	github.com/xornet-sl/xcommon v0.0.0-20221010170557-45d6e739d7c7
 	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
-	xcommon v0.0.0-00010101000000-000000000000
 )
 
 require github.com/gorilla/websocket v1.4.2 // indirect

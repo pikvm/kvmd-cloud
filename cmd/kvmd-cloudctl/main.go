@@ -8,8 +8,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/pikvm/kvmd-cloud-agent/internal/config"
-	"github.com/pikvm/kvmd-cloud-agent/internal/config/vars"
+	"github.com/pikvm/kvmd-cloud/internal/config"
+	"github.com/pikvm/kvmd-cloud/internal/config/vars"
 )
 
 func main() {

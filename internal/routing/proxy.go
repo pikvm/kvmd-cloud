@@ -2,9 +2,10 @@ package routing
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
-	"github.com/pikvm/kvmd-cloud-agent/internal/config"
+	"github.com/pikvm/kvmd-cloud/internal/config"
 	log "github.com/sirupsen/logrus"
 	"github.com/xornet-sl/gjrpc"
 )
@@ -13,6 +14,7 @@ var (
 	rpc *gjrpc.Rpc = nil
 )
 
+// proxy side requests a new connection
 func requestConnectionRpc(handler *gjrpc.ApiHandler, cid string, connectTo string) error {
 	_, err := CreateConnection(handler, cid, connectTo)
 	return err
@@ -20,7 +22,9 @@ func requestConnectionRpc(handler *gjrpc.ApiHandler, cid string, connectTo strin
 
 // routed connection lost on proxy's side
 func connectionClosedNotification(cid string) {
-	//
+	if connection := GetConnection(cid); connection != nil {
+		connection.Close()
+	}
 }
 
 // incoming data from proxy
@@ -45,8 +49,16 @@ func Serve(ctx context.Context) error {
 	rpc.RegisterMethod("data", dataNotification)
 
 	rpc.SetOnNewHandlerCallback(func(handler *gjrpc.ApiHandler) error {
-		return rpc.Call(handler.Ctx, nil, "registerAgent", config.Cfg.AgentName)
+		log.Debugf("connected to proxy %s", handler.Conn.RemoteAddr().String())
+		go func() {
+			err := handler.Call(handler.Ctx, nil, "registerAgent", config.Cfg.AgentName)
+			if err != nil {
+				log.WithError(err).Errorf("unable to register on proxy %s", handler.Conn.RemoteAddr().String())
+				handler.Conn.Close()
+			}
+		}()
+		return nil
 	})
 
-	return rpc.DialAndServe("ws://localhost:9999", http.Header{})
+	return rpc.DialAndServe(fmt.Sprintf("ws://%s", config.Cfg.ProxyAddress), http.Header{}, nil)
 }

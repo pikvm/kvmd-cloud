@@ -9,7 +9,7 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/pikvm/kvmd-cloud-agent/internal/config"
+	"github.com/pikvm/kvmd-cloud/internal/config"
 )
 
 func newUnixClient() http.Client {

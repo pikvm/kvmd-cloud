@@ -4,4 +4,4 @@
 
 - NEW: Initial version
 
-[1.0.0]: https://github.com/pikvm/kvmd-agent/tree/v1.0.0
+[1.0.0]: https://github.com/pikvm/kvmd-cloud/tree/v1.0.0
