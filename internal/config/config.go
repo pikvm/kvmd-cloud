@@ -13,6 +13,9 @@ import (
 )
 
 type Config struct {
+	Hive struct {
+		Endpoints []string `json:"endpoints"`
+	} `json:"hive"`
 	UnixCtlSocket string `json:"unixCtlSocket"`
 	AgentName     string `json:"agentName"`
 	Log           struct {

@@ -14,7 +14,7 @@ import (
 	"github.com/pikvm/kvmd-cloud/internal/config"
 	"github.com/pikvm/kvmd-cloud/internal/config/vars"
 	ctlserver "github.com/pikvm/kvmd-cloud/internal/ctl/ctlServer"
-	"github.com/pikvm/kvmd-cloud/internal/routing"
+	"github.com/pikvm/kvmd-cloud/internal/proxy"
 )
 
 func root(rootCmd *cobra.Command, args []string) error {
@@ -28,7 +28,7 @@ func root(rootCmd *cobra.Command, args []string) error {
 		return err
 	})
 	group.Go(func() error {
-		err := routing.Serve(ctx)
+		err := proxy.Dial(ctx)
 		if err != nil {
 			err = fmt.Errorf("unable to launch routing server: %w", err)
 		}
