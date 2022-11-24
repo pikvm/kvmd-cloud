@@ -58,6 +58,7 @@ func startNewConnection(pconn *ProxyConnection, connDescr *pb.ProxyEvent_NewConn
 
 	// Send initial metadata
 	if err = stream.Send(&pb.ConnectionMessage{
+		Type: pb.ConnectionMessage_MSGTYPE_METADATA,
 		Body: &pb.ConnectionMessage_Metadata_{
 			Metadata: &pb.ConnectionMessage_Metadata{
 				Cid: cid,

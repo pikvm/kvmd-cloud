@@ -14,6 +14,24 @@ const (
 	pingInterval = 2 * time.Second
 )
 
+type EventSendPacket struct {
+	Event *pb.AgentEvent
+	Error chan error
+}
+
+func (this *ProxyEventsChannel) Send(event *pb.AgentEvent) error {
+	if this.Stream == nil {
+		return fmt.Errorf("events stream is not open")
+	}
+	packet := &EventSendPacket{
+		Event: event,
+		Error: make(chan error),
+	}
+	defer close(packet.Error)
+	this.SendEventsQueue <- packet
+	return <-packet.Error
+}
+
 func processEvents(pconn *ProxyConnection) error {
 	stream, err := pconn.ProxyClient.EventsChannel(pconn.Ctx)
 	if err != nil {
@@ -44,21 +62,39 @@ func processEvents(pconn *ProxyConnection) error {
 		return err
 	}
 	// TODO: timeouts
-	event, err := stream.Recv()
-	if err != nil {
-		log.WithError(err).Errorf("unable to register on proxy %s", pconn.Addr)
-		return err
-	}
-	if event.Type != pb.ProxyEventType_PETYPE_OK ||
-		event.Id != evId ||
-		event.IsResponse != true {
-		err = fmt.Errorf("unable to register on proxy %s: malformed response", pconn.Addr)
-		log.Errorf(err.Error())
-		stream.CloseSend()
-		return err
+	pingsWhileRegister := 0
+	var event *pb.ProxyEvent
+	for {
+		if pingsWhileRegister >= 3 {
+			err := fmt.Errorf("unable to register on proxy %s: timeout", pconn.Addr)
+			log.Errorf(err.Error())
+			stream.CloseSend()
+			return err
+		}
+		pingsWhileRegister += 1
+		event, err = stream.Recv()
+		if err != nil {
+			log.WithError(err).Errorf("unable to register on proxy %s", pconn.Addr)
+			return err
+		}
+		if event.Type == pb.ProxyEventType_PETYPE_PING {
+			continue
+		}
+		if event.Type != pb.ProxyEventType_PETYPE_OK ||
+			event.Id != evId ||
+			event.IsResponse != true {
+			err = fmt.Errorf("unable to register on proxy %s: malformed response: %#+v", pconn.Addr, event)
+			log.Errorf(err.Error())
+			stream.CloseSend()
+			return err
+		}
+		break
 	}
 	log.Debugf("registered on proxy %s", pconn.Addr)
 
+	pconn.Events.Stream = stream
+
+	// Sender
 	go func() {
 		ticker := time.NewTicker(pingInterval)
 		for {
@@ -78,12 +114,21 @@ func processEvents(pconn *ProxyConnection) error {
 					pconn.GrpcConn.Close()
 					return
 				}
+			case event, ok := <-pconn.Events.SendEventsQueue:
+				if !ok {
+					// Someone closed this channel for a reason. Quit silently
+					stream.CloseSend()
+					return
+				}
+				event.Error <- stream.Send(event.Event)
 			}
 		}
 	}()
+	// Receiver
 	for {
 		event, err := stream.Recv()
 		if err == io.EOF {
+			// proxy lost
 			return nil
 		}
 		if err != nil {
@@ -95,7 +140,7 @@ func processEvents(pconn *ProxyConnection) error {
 		case pb.ProxyEventType_PETYPE_NEW_CONNECTION:
 			// Process a new connection
 			if err = startNewConnection(pconn, event.GetNewConnection()); err != nil {
-				if err = stream.Send(&pb.AgentEvent{
+				if err = pconn.Events.Send(&pb.AgentEvent{
 					Id:         event.GetId(),
 					Type:       pb.AgentEventType_AETYPE_ERROR,
 					IsResponse: true,
@@ -106,7 +151,7 @@ func processEvents(pconn *ProxyConnection) error {
 					return err
 				}
 			}
-			if err = stream.Send(&pb.AgentEvent{
+			if err = pconn.Events.Send(&pb.AgentEvent{
 				Id:         event.GetId(),
 				Type:       pb.AgentEventType_AETYPE_OK,
 				IsResponse: true,

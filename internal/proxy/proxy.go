@@ -12,11 +12,17 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+type ProxyEventsChannel struct {
+	Stream          pb.Proxy_EventsChannelClient
+	SendEventsQueue chan *EventSendPacket
+}
+
 type ProxyConnection struct {
 	Ctx         context.Context
 	Addr        string
 	GrpcConn    *grpc.ClientConn
 	ProxyClient pb.ProxyClient
+	Events      ProxyEventsChannel
 }
 
 var (
@@ -40,11 +46,17 @@ func Dial(ctx context.Context) error {
 		Ctx:         dialCtx,
 		GrpcConn:    conn,
 		ProxyClient: c,
+		Events: ProxyEventsChannel{
+			Stream:          nil,
+			SendEventsQueue: make(chan *EventSendPacket),
+		},
 	}
 
 	if err = processEvents(proxyConnection); err != nil {
 		return err
 	}
+
+	log.Debugf("connection to proxy %s lost", addr)
 
 	return nil
 }
