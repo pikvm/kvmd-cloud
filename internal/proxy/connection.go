@@ -7,7 +7,7 @@ import (
 	"sync"
 	"syscall"
 
-	pb "github.com/pikvm/cloud-api/proxy"
+	pb "github.com/pikvm/cloud-api/proxy_for_agent"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -16,7 +16,7 @@ type Connection struct {
 	Cid             string
 	ConnectTo       string
 	InnerConn       net.Conn
-	ProxyStream     pb.Proxy_ConnectionChannelClient
+	ProxyStream     pb.ProxyForAgent_ConnectionChannelClient
 	// ToInnerChan     chan []byte
 }
 
@@ -122,7 +122,7 @@ func startNewConnection(pconn *ProxyConnection, connDescr *pb.ProxyEvent_NewConn
 		defer close(readCloserChan)
 		buff := make([]byte, 2048)
 		for {
-			_, err := connection.InnerConn.Read(buff)
+			n, err := connection.InnerConn.Read(buff)
 			if isNetConnClosedErr(err) {
 				return
 			} else if err != nil {
@@ -132,7 +132,7 @@ func startNewConnection(pconn *ProxyConnection, connDescr *pb.ProxyEvent_NewConn
 			}
 			if err = connection.ProxyStream.Send(&pb.ConnectionMessage{
 				Body: &pb.ConnectionMessage_Chunk{
-					Chunk: buff,
+					Chunk: buff[:n],
 				},
 			}); err != nil {
 				log.WithError(err).Errorf("unable to send data to proxy")

@@ -5,7 +5,7 @@ import (
 	"io"
 	"time"
 
-	pb "github.com/pikvm/cloud-api/proxy"
+	pb "github.com/pikvm/cloud-api/proxy_for_agent"
 	"github.com/pikvm/kvmd-cloud/internal/config"
 	log "github.com/sirupsen/logrus"
 )
@@ -150,8 +150,7 @@ func processEvents(pconn *ProxyConnection) error {
 				}); err != nil {
 					return err
 				}
-			}
-			if err = pconn.Events.Send(&pb.AgentEvent{
+			} else if err = pconn.Events.Send(&pb.AgentEvent{
 				Id:         event.GetId(),
 				Type:       pb.AgentEventType_AETYPE_OK,
 				IsResponse: true,

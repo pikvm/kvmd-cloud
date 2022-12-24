@@ -13,7 +13,8 @@ import (
 )
 
 type Config struct {
-	Hive struct {
+	AuthToken string `json:"authToken"`
+	Hive      struct {
 		Endpoints []string `json:"endpoints"`
 	} `json:"hive"`
 	UnixCtlSocket string `json:"unixCtlSocket"`
@@ -23,8 +24,6 @@ type Config struct {
 		File  string `json:"file"`
 		Trace bool   `json:"trace"`
 	} `json:"log"`
-	// TODO: tmp settings
-	ProxyAddress string `json:"proxyAddress"`
 }
 
 var DefaultConfig = map[string]interface{}{

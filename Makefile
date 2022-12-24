@@ -6,7 +6,7 @@ BINDIR          := bin
 BINS            ?= $(shell find cmd -name 'main.go' | cut -d/ -f2)
 export GOCACHE  := $(CURDIR)/build
 
-ARCHS           ?= amd64
+ARCHS           ?= amd64 arm
 
 TAGS            ?=
 TESTS           := .
