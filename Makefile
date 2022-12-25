@@ -84,7 +84,7 @@ proto:
 		internal/ctl/ctl.proto
 
 .PHONY: build
-build: proto $(OUTPUTS)
+build: $(OUTPUTS)
 
 $(OUTPUTS):%: $(SRC) $(CMD_SRC)
 ifdef MULTIARCH
