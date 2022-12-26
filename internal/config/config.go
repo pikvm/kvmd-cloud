@@ -13,24 +13,24 @@ import (
 )
 
 type Config struct {
-	AuthToken string `json:"authToken"`
+	AuthToken string `json:"auth_token" mapstructure:"auth_token"`
 	Hive      struct {
-		Endpoints []string `json:"endpoints"`
-	} `json:"hive"`
-	UnixCtlSocket string `json:"unixCtlSocket"`
-	AgentName     string `json:"agentName"`
+		Endpoints []string `json:"endpoints" mapstructure:"endpoints"`
+	} `json:"hive" mapstructure:"hive"`
+	UnixCtlSocket string `json:"unix_ctl_socket" mapstructure:"unix_ctl_socket"`
+	AgentName     string `json:"agent_name" mapstructure:"agent_name"`
 	Log           struct {
-		Level string `json:"level"`
-		File  string `json:"file"`
-		Trace bool   `json:"trace"`
-	} `json:"log"`
+		Level string `json:"level" mapstructure:"level"`
+		File  string `json:"file" mapstructure:"file"`
+		Trace bool   `json:"trace" mapstructure:"trace"`
+	} `json:"log" mapstructure:"log"`
 }
 
 var DefaultConfig = map[string]interface{}{
-	"unixCtlSocket": "/run/kvmd/cloud.sock",
-	"log.level":     "info",
-	"log.file":      "-",
-	"log.trace":     false,
+	"unix_ctl_socket": "/run/kvmd/cloud2.sock",
+	"log.level":       "info",
+	"log.file":        "-",
+	"log.trace":       false,
 }
 
 var Cfg *Config = nil
@@ -38,9 +38,8 @@ var ConfigurationResult *xcommon.ConfigurationResult = nil
 
 var ConfigPlan = xcommon.ConfigurePlan{
 	ConfigParsingRules: xcommon.ViperConfig{
-		SearchDirs:     []string{vars.BaseConfigDir},
-		SearchFiles:    []string{vars.MainConfigName, vars.OverrideConfigName},
-		ExtractSubtree: vars.ExtractConfigNode,
+		SearchDirs:  []string{vars.BaseConfigDir},
+		SearchFiles: []string{vars.MainConfigName},
 	},
 }
 
@@ -92,7 +91,7 @@ func configureLogger() {
 	if len(ConfigurationResult.ParsedConfigs) > 0 {
 		log.Debugf("Configurations loaded successfully: %v", ConfigurationResult.ParsedConfigs)
 	} else {
-		log.Info("No configuration found")
+		log.Warn("No configuration found")
 	}
 }
 

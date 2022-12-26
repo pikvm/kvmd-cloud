@@ -21,6 +21,16 @@ import (
 func root(rootCmd *cobra.Command, args []string) error {
 	group, ctx := errgroup.WithContext(rootCmd.Context())
 
+	if ok, err := rootCmd.Flags().GetBool("run"); err != nil {
+		return err
+	} else if !ok {
+		fmt.Fprintf(log.StandardLogger().Out, "Forgot '--run'?\n\n")
+		if err := rootCmd.Usage(); err != nil {
+			return err
+		}
+		return nil
+	}
+
 	group.Go(func() error {
 		err := ctlserver.RunServer(ctx)
 		if err != nil {

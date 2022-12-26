@@ -24,6 +24,7 @@ func RunServer(ctx context.Context) error {
 	srv := &http.Server{
 		Handler: r,
 	}
+	log.Warn(config.Cfg.UnixCtlSocket)
 	unixListener, err := net.Listen("unix", config.Cfg.UnixCtlSocket)
 	if err != nil {
 		return err
