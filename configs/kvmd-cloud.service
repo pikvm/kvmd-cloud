@@ -1,0 +1,13 @@
+[Unit]
+Description=PiKVM - Cloud agent
+After=kvmd.service
+
+[Service]
+User=kvmd-cloud
+Group=kvmd-cloud
+Type=simple
+Restart=always
+RestartSec=3
+
+ExecStart=/usr/bin/kvmd-cloud --run
+TimeoutStopSec=3
