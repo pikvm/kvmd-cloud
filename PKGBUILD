@@ -34,8 +34,9 @@ package() {
 	cp configs/sysusers.conf "$pkgdir/usr/lib/sysusers.d/kvmd-cloud.conf"
 
 	mkdir -p "$pkgdir/usr/share/kvmd/extras/kvmd-cloud"
-	cp configs/nginx.ctx-http.conf "$pkgdir/usr/share/kvmd/extras/kvmd-cloud"
+	cp configs/nginx.ctx-http.share.conf "$pkgdir/usr/share/kvmd/extras/kvmd-cloud/nginx.ctx-http.conf"
 
 	mkdir -p "$pkgdir/etc/kvmd/cloud/ssl"
 	chmod 755 "$pkgdir/etc/kvmd/cloud/ssl"
+	cp configs/nginx.ctx-http.etc.conf "$pkgdir/etc/kvmd/cloud/nginx.ctx-http.conf"
 }
