@@ -1,5 +1,5 @@
 pkgname=kvmd-cloud
-pkgver=0.2
+pkgver=0.3
 pkgrel=1
 pkgdesc="PiKVM cloud agent"
 url="https://github.com/pikvm/kvmd-cloud"
