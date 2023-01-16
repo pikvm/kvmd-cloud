@@ -1,5 +1,5 @@
 pkgname=kvmd-cloud
-pkgver=1.0.0
+pkgver=0.1
 pkgrel=1
 pkgdesc="PiKVM cloud agent"
 url="https://github.com/pikvm/kvmd-cloud"
@@ -21,7 +21,7 @@ backup=(
 
 build() {
 	cd $pkgname-$pkgver
-	make build ARCHS=arm
+	make build VERSION=$pkgver ARCHS=arm
 }
 
 package() {

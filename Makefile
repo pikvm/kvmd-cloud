@@ -150,3 +150,23 @@ dump-all:
 	    $(shell echo "$(filter-out .VARIABLES,$(.VARIABLES))" | tr ' ' '\n' | sort), \
 	    $(info $(shell printf "%-20s" "$(v)")= $(value $(v))) \
 	)
+
+
+###################################
+release:
+	make clean
+	#make tox
+	#make clean
+	make push
+	make bump V=$(V)
+	make push
+	make clean
+
+
+bump:
+	bumpversion $(if $(V),$(V),minor)
+
+
+push:
+	git push
+	git push --tags
