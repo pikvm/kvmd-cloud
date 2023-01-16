@@ -6,12 +6,12 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-type InsecureRPCCred struct {
+type RPCCred struct {
 	md    map[string]string
 	token string
 }
 
-func (this InsecureRPCCred) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+func (this RPCCred) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
 	result := map[string]string{}
 	for k, v := range this.md {
 		result[k] = v
@@ -20,10 +20,10 @@ func (this InsecureRPCCred) GetRequestMetadata(ctx context.Context, uri ...strin
 	return result, nil
 }
 
-func (this InsecureRPCCred) RequireTransportSecurity() bool {
+func (this RPCCred) RequireTransportSecurity() bool {
 	return false
 }
 
-func NewInsecureRPCCred(md map[string]string, token string) credentials.PerRPCCredentials {
-	return InsecureRPCCred{md: md, token: token}
+func NewRPCCred(md map[string]string, token string) credentials.PerRPCCredentials {
+	return RPCCred{md: md, token: token}
 }

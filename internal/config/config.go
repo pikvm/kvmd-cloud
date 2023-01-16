@@ -14,7 +14,13 @@ import (
 
 type Config struct {
 	AuthToken string `json:"auth_token" mapstructure:"auth_token"`
-	Hive      struct {
+	NoSSL     bool   `json:"nossl" mapstructure:"nossl"`
+	SSL       struct {
+		Ca string `json:"ca" mapstructure:"ca"`
+		// Cert string `json:"cert" mapstructure:"cert"`
+		// Key  string `json:"key" mapstructure:"key"`
+	} `json:"ssl" mapstructure:"ssl"`
+	Hive struct {
 		Endpoints []string `json:"endpoints" mapstructure:"endpoints"`
 	} `json:"hive" mapstructure:"hive"`
 	UnixCtlSocket string `json:"unix_ctl_socket" mapstructure:"unix_ctl_socket"`
