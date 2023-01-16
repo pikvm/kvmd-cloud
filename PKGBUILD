@@ -14,7 +14,8 @@ source=(
 )
 md5sums=(SKIP SKIP)
 backup=(
-	etc/kvmd/cloud/cloud.yaml
+	etc/kvmd/cloud/{cloud,auth}.yaml
+	etc/kvmd/cloud/nginx.ctx-http.conf
 )
 
 
