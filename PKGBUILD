@@ -39,7 +39,7 @@ package() {
 
 	mkdir -p "$pkgdir/etc/kvmd/cloud/ssl"
 	chmod 755 "$pkgdir/etc/kvmd/cloud/ssl"
-	cp configs/nginx.ctx-http.etc.conf "$pkgdir/etc/kvmd/cloud/nginx.ctx-http.conf"
+	# cp configs/nginx.ctx-http.etc.conf "$pkgdir/etc/kvmd/cloud/nginx.ctx-http.conf"
 
 	cd certbot_dns_pikvm
 	python setup.py install --prefix=/usr --root="$pkgdir" --optimize=1
