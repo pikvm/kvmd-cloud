@@ -21,12 +21,12 @@ backup=(
 
 build() {
 	cd $pkgname-$pkgver
-	make build VERSION=$pkgver ARCHS=arm
+	GOMAXPROCS=1 make build VERSION=$pkgver ARCHS=arm
 }
 
 package() {
 	cd $pkgname-$pkgver
-	install -Dm755 -t "$pkgdir/usr/bin" bin/arm/kvmd-*
+	install -Dm755 -t "$pkgdir/usr/bin" bin/kvmd-*
 
 	mkdir -p "$pkgdir/usr/lib/systemd/system"
 	cp configs/kvmd-cloud.service "$pkgdir/usr/lib/systemd/system/kvmd-cloud.service"
