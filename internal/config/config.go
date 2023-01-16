@@ -39,7 +39,7 @@ var ConfigurationResult *xcommon.ConfigurationResult = nil
 var ConfigPlan = xcommon.ConfigurePlan{
 	ConfigParsingRules: xcommon.ViperConfig{
 		SearchDirs:  []string{vars.BaseConfigDir},
-		SearchFiles: []string{vars.MainConfigName},
+		SearchFiles: []string{vars.MainConfigName, vars.AuthConfigName},
 	},
 }
 

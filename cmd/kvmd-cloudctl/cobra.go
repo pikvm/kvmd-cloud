@@ -23,6 +23,24 @@ var statusCmd = cobra.Command{
 	RunE:  ctlclient.RequestStatus,
 }
 
+var authCmd = cobra.Command{
+	Use:   "auth",
+	Short: "Authorize agent in cloud",
+	RunE:  ctlclient.Auth,
+}
+
+var certbotAddCmd = cobra.Command{
+	Use:   "certbotAdd <domainName> <txt>",
+	Short: "Adds DNS TXT record for certbot authorization challenge",
+	RunE:  ctlclient.CertbotAdd,
+}
+
+var certbotDelCmd = cobra.Command{
+	Use:   "certbotDel <domainName>",
+	Short: "Cleanup DNS TXT record after certbot authorization challenge",
+	RunE:  ctlclient.CertbotDel,
+}
+
 func buildCobra() (*cobra.Command, map[string]*pflag.Flag, error) {
 	// 	rootCmd.PersistentFlags().String(
 	// 		"unixCtlSocket",
@@ -35,5 +53,8 @@ func buildCobra() (*cobra.Command, map[string]*pflag.Flag, error) {
 	// 	}
 
 	rootCmd.AddCommand(&statusCmd)
+	rootCmd.AddCommand(&authCmd)
+	rootCmd.AddCommand(&certbotAddCmd)
+	rootCmd.AddCommand(&certbotDelCmd)
 	return &rootCmd, nil, nil
 }

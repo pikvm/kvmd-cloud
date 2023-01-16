@@ -32,7 +32,7 @@ func (this *ProxyEventsChannel) Send(event *pb.AgentEvent) error {
 	return <-packet.Error
 }
 
-func processEvents(pconn *ProxyConnection) error {
+func ProcessEvents(pconn *ProxyConnection) error {
 	stream, err := pconn.ProxyClient.EventsChannel(pconn.Ctx)
 	if err != nil {
 		return err
@@ -61,6 +61,7 @@ func processEvents(pconn *ProxyConnection) error {
 		stream.CloseSend()
 		return err
 	}
+	defer log.Debugf("connection to proxy %s lost", pconn.Addr)
 	// TODO: timeouts
 	pingsWhileRegister := 0
 	var event *pb.ProxyEvent
@@ -77,12 +78,12 @@ func processEvents(pconn *ProxyConnection) error {
 			log.WithError(err).Errorf("unable to register on proxy %s", pconn.Addr)
 			return err
 		}
-		if event.Type == pb.ProxyEventType_PETYPE_PING {
+		if event.GetType() == pb.ProxyEventType_PETYPE_PING {
 			continue
 		}
-		if event.Type != pb.ProxyEventType_PETYPE_OK ||
-			event.Id != evId ||
-			event.IsResponse != true {
+		if event.GetType() != pb.ProxyEventType_PETYPE_OK ||
+			event.GetId() != evId ||
+			event.GetIsResponse() != true {
 			err = fmt.Errorf("unable to register on proxy %s: malformed response: %#+v", pconn.Addr, event)
 			log.Errorf(err.Error())
 			stream.CloseSend()

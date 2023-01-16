@@ -14,8 +14,7 @@ import (
 	"github.com/pikvm/kvmd-cloud/internal/config"
 	"github.com/pikvm/kvmd-cloud/internal/config/vars"
 	ctlserver "github.com/pikvm/kvmd-cloud/internal/ctl/ctlServer"
-	"github.com/pikvm/kvmd-cloud/internal/hive"
-	"github.com/pikvm/kvmd-cloud/internal/proxy"
+	"github.com/pikvm/kvmd-cloud/internal/hive/guard"
 )
 
 func root(rootCmd *cobra.Command, args []string) error {
@@ -38,25 +37,13 @@ func root(rootCmd *cobra.Command, args []string) error {
 		}
 		return err
 	})
+
 	group.Go(func() error {
-		proxies, err := hive.Dial(ctx, group)
+		err := guard.Guard(ctx)
 		if err != nil {
-			return fmt.Errorf("unable to connect to hive: %w", err)
+			err = fmt.Errorf("unable to launch hive & proxies connections: %w", err)
 		}
-		if proxies == nil || len(proxies.GetAvailableProxies()) == 0 {
-			return fmt.Errorf("no proxies from hive")
-		}
-		for _, proxyInfo := range proxies.GetAvailableProxies() {
-			group.Go(func() error {
-				err := proxy.Dial(ctx, proxyInfo)
-				if err != nil {
-					return fmt.Errorf("unable to launch routing server: %w", err)
-				}
-				return fmt.Errorf("connection to proxy %s lost", proxyInfo.GetProxyEndpoint()) // TODO: remove on multi-proxy
-			})
-			break // TODO: support multiple
-		}
-		return nil
+		return err
 	})
 
 	return group.Wait()

@@ -4,29 +4,28 @@ import (
 	"context"
 	"fmt"
 
-	pb "github.com/pikvm/cloud-api/hive_for_agent"
+	hive_pb "github.com/pikvm/cloud-api/hive_for_agent"
 	"github.com/pikvm/kvmd-cloud/internal/config"
 	"github.com/pikvm/kvmd-cloud/internal/config/vars"
 	"github.com/pikvm/kvmd-cloud/internal/util"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 type HiveConnection struct {
 	Ctx        context.Context
 	Addr       string
 	GrpcConn   *grpc.ClientConn
-	HiveClient pb.HiveForAgentClient
+	HiveClient hive_pb.HiveForAgentClient
+	Events     HiveEventsChannel
 }
 
 var (
 	hiveConnection *HiveConnection = nil
 )
 
-func Dial(ctx context.Context, group *errgroup.Group) (*pb.AvailableProxies, error) {
+func Dial(ctx context.Context) (*HiveConnection, error) {
 	if len(config.Cfg.Hive.Endpoints) == 0 {
 		return nil, fmt.Errorf("hive endpoints not specified")
 	}
@@ -45,22 +44,39 @@ func Dial(ctx context.Context, group *errgroup.Group) (*pb.AvailableProxies, err
 	if err != nil {
 		return nil, err
 	}
-	c := pb.NewHiveForAgentClient(conn)
-	if _, err := c.RegisterAgent(ctx, &pb.AgentInfo{
-		Name: config.Cfg.AgentName,
-	}); err != nil {
-		return nil, err
-	}
+	c := hive_pb.NewHiveForAgentClient(conn)
 	log.Debugf("connected to hive %s", addr)
-	proxies, err := c.GetAvailableProxies(ctx, &emptypb.Empty{})
-	if err != nil {
-		return nil, err
-	}
 	hiveConnection = &HiveConnection{
 		Ctx:        ctx,
 		Addr:       addr,
 		GrpcConn:   conn,
 		HiveClient: c,
+		Events: HiveEventsChannel{
+			Stream:          nil,
+			SendEventsQueue: make(chan *EventSendPacket),
+		},
 	}
-	return proxies, nil
+
+	return hiveConnection, nil
+}
+
+func CertbotAdd(ctx context.Context, domainName string, txt string) error {
+	if hiveConnection == nil {
+		return fmt.Errorf("not connected to hive")
+	}
+	_, err := hiveConnection.HiveClient.CertbotAdd(ctx, &hive_pb.CertbotDomainName{
+		DomainName: domainName,
+		Txt:        txt,
+	})
+	return err
+}
+
+func CertbotDel(ctx context.Context, domainName string) error {
+	if hiveConnection == nil {
+		return fmt.Errorf("not connected to hive")
+	}
+	_, err := hiveConnection.HiveClient.CertbotDel(ctx, &hive_pb.CertbotDomainName{
+		DomainName: domainName,
+	})
+	return err
 }

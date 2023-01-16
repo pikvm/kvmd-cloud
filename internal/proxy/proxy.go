@@ -30,7 +30,7 @@ var (
 	proxyConnection *ProxyConnection = nil
 )
 
-func Dial(ctx context.Context, proxyInfo *hive_pb.AvailableProxies_ProxyInfo) error {
+func Dial(ctx context.Context, proxyInfo *hive_pb.AvailableProxies_ProxyInfo) (*ProxyConnection, error) {
 	addr := proxyInfo.GetProxyEndpoint()
 
 	auth_md := map[string]string{
@@ -44,7 +44,7 @@ func Dial(ctx context.Context, proxyInfo *hive_pb.AvailableProxies_ProxyInfo) er
 		grpc.WithPerRPCCredentials(util.NewInsecureRPCCred(auth_md, config.Cfg.AuthToken)),
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	c := proxy_pb.NewProxyForAgentClient(conn)
 	log.Debugf("connected to proxy %s", addr)
@@ -59,11 +59,5 @@ func Dial(ctx context.Context, proxyInfo *hive_pb.AvailableProxies_ProxyInfo) er
 		},
 	}
 
-	if err = processEvents(proxyConnection); err != nil {
-		return err
-	}
-
-	log.Debugf("connection to proxy %s lost", addr)
-
-	return nil
+	return proxyConnection, nil
 }
