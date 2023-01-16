@@ -16,7 +16,7 @@ func (this RPCCred) GetRequestMetadata(ctx context.Context, uri ...string) (map[
 	for k, v := range this.md {
 		result[k] = v
 	}
-	result["authorization"] = "bearer " + this.token
+	result["authorization"] = "Bearer " + this.token
 	return result, nil
 }
 

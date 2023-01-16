@@ -2,14 +2,10 @@ module github.com/pikvm/kvmd-cloud
 
 go 1.18
 
-// replace github.com/xornet-sl/gjrpc => ../../../my/go-jrpc2
-
-replace github.com/pikvm/cloud-api => ../cloud-api
-
 require (
 	github.com/gin-gonic/gin v1.8.1
 	github.com/google/uuid v1.3.0
-	github.com/pikvm/cloud-api v0.0.0-00010101000000-000000000000
+	github.com/pikvm/cloud-api v0.0.0-20230116002754-6e0a16450e2b
 	github.com/sirupsen/logrus v1.9.0
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/pflag v1.0.5
