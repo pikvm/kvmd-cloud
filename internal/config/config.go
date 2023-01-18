@@ -33,7 +33,7 @@ type Config struct {
 }
 
 var DefaultConfig = map[string]interface{}{
-	"unix_ctl_socket": "/run/kvmd/cloud2.sock",
+	"unix_ctl_socket": "/run/kvmd/cloud-ctl.sock",
 	"hive.endpoints":  []string{"pikvm.cloud:9000"},
 	"log.level":       "info",
 	"log.file":        "-",

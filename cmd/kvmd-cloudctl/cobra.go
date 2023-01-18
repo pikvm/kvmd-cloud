@@ -23,10 +23,10 @@ var statusCmd = cobra.Command{
 	RunE:  ctlclient.RequestStatus,
 }
 
-var authCmd = cobra.Command{
-	Use:   "auth",
-	Short: "Authorize agent in cloud",
-	RunE:  ctlclient.Auth,
+var setupCmd = cobra.Command{
+	Use:   "setup",
+	Short: "Authorize in cloud and configure agent",
+	RunE:  Setup,
 }
 
 func buildCobra() (*cobra.Command, map[string]*pflag.Flag, error) {
@@ -41,6 +41,6 @@ func buildCobra() (*cobra.Command, map[string]*pflag.Flag, error) {
 	// 	}
 
 	rootCmd.AddCommand(&statusCmd)
-	rootCmd.AddCommand(&authCmd)
+	rootCmd.AddCommand(&setupCmd)
 	return &rootCmd, nil, nil
 }
