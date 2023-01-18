@@ -13,10 +13,6 @@ source=(
 	pkg.install
 )
 md5sums=(SKIP SKIP)
-backup=(
-	etc/kvmd/cloud/{cloud,auth}.yaml
-	etc/kvmd/cloud/nginx.ctx-http.conf
-)
 
 
 build() {
@@ -39,5 +35,4 @@ package() {
 
 	mkdir -p "$pkgdir/etc/kvmd/cloud/ssl"
 	chmod 755 "$pkgdir/etc/kvmd/cloud/ssl"
-	# cp configs/nginx.ctx-http.etc.conf "$pkgdir/etc/kvmd/cloud/nginx.ctx-http.conf"
 }
