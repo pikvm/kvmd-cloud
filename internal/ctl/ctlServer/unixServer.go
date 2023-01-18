@@ -72,8 +72,6 @@ func RunServer(ctx context.Context) error {
 
 func setupRoutes(r *gin.Engine) {
 	r.GET("/status", getStatus)
-	r.POST("/certbotAdd", certbotAdd)
-	r.POST("/certbotDel", certbotDel)
 }
 
 func getStatus(c *gin.Context) {
