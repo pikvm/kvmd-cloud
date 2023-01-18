@@ -36,6 +36,7 @@ func Setup(cmd *cobra.Command, args []string) error {
 	config.Cfg.AgentName = agentName
 	config.Cfg.AuthToken = token
 
+	log.Info("Performing authorization attempt...")
 	if err := tryAuthorize(cmd.Context()); err != nil {
 		return fmt.Errorf("authorization failed: %w", err)
 	}
@@ -46,6 +47,7 @@ func Setup(cmd *cobra.Command, args []string) error {
 	}
 	log.Info("Authorization information saved")
 
+	log.Info("Preparing http configuration for letsencrypt...")
 	if err := os.WriteFile(nginxFilepath, nginxHttpContent, 0644); err != nil {
 		return fmt.Errorf("unable to write nginx configuration: %w", err)
 	}
@@ -55,6 +57,7 @@ func Setup(cmd *cobra.Command, args []string) error {
 	if err := launchCmd([]string{"systemctl", "enable", "--now", "kvmd-cloud"}); err != nil {
 		return fmt.Errorf("unable to start kvmd-cloud agent: %w", err)
 	}
+	log.Info("Requesting letsencrypt SSL certificate...")
 	if err := launchCmd([]string{
 		"kvmd-certbot", "certonly_webroot", "--agree-tos", "-n",
 		"--email", email,
@@ -68,8 +71,8 @@ func Setup(cmd *cobra.Command, args []string) error {
 	if err := launchCmd([]string{"kvmd-certbot", "install_cloud", domainName}); err != nil {
 		return fmt.Errorf("unable to install certificate: %w", err)
 	}
-	if err := launchCmd([]string{"systemctl", "restart", "kvmd-cloud"}); err != nil {
-		return fmt.Errorf("unable to restart kvmd-cloud agent: %w", err)
+	if err := launchCmd([]string{"systemctl", "enable", "--now", "kvmd-certbot.timer"}); err != nil {
+		return fmt.Errorf("unable to install certificate: %w", err)
 	}
 
 	log.Info("Done.")
@@ -100,6 +103,7 @@ func askCreds() (agentName string, token string, domainName string, email string
 	fmt.Print("Authorization token: ")
 	var b []byte
 	b, err = term.ReadPassword(int(syscall.Stdin))
+	fmt.Println()
 	if err != nil {
 		return
 	}
