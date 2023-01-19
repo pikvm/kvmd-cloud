@@ -39,5 +39,15 @@ func main() {
 	)
 	defer cancel()
 
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		select {
+		case <-ctx.Done():
+			os.Exit(1)
+		case <-done:
+			return
+		}
+	}()
 	err = rootCmd.ExecuteContext(ctx)
 }
