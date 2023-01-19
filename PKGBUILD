@@ -5,7 +5,7 @@ pkgdesc="PiKVM cloud agent"
 url="https://github.com/pikvm/kvmd-cloud"
 license=(custom)
 arch=(armv7h)
-depends=(kvmd)
+depends=("kvmd>=3.193")
 makedepends=(go make)
 install=pkg.install
 source=(
