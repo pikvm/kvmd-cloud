@@ -12,8 +12,8 @@ post_upgrade() {
 		usermod --expiredate= "$user" >/dev/null
 	done
 
-	chown root:root /etc/kvmd/cloud/ssl || true
-	chown root:kvmd-nginx /etc/kvmd/cloud/ssl/* || true
-	chmod 440 /etc/kvmd/cloud/ssl/server.key || true
-	chmod 444 /etc/kvmd/cloud/ssl/server.crt || true
+	chown root:root /etc/kvmd/cloud/ssl  2>/dev/null || true
+	chown root:kvmd-nginx /etc/kvmd/cloud/ssl/* 2>/dev/null || true
+	chmod 440 /etc/kvmd/cloud/ssl/server.key 2>/dev/null || true
+	chmod 444 /etc/kvmd/cloud/ssl/server.crt 2>/dev/null || true
 }
