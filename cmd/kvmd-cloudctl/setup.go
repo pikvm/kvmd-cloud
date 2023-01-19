@@ -20,6 +20,7 @@ import (
 const (
 	authFilepath  = "/etc/kvmd/cloud/auth.yaml"
 	nginxFilepath = "/etc/kvmd/cloud/nginx.ctx-http.conf"
+	baseDomain    = "pikvm.cloud"
 )
 
 //go:embed configs/nginx.http.conf
@@ -109,10 +110,11 @@ func askCreds() (agentName string, token string, domainName string, email string
 	}
 	token = string(b)
 
-	fmt.Print("Domain name: ")
-	if _, err = fmt.Scanln(&domainName); err != nil {
-		return
-	}
+	domainName = agentName + "." + baseDomain
+	// fmt.Print("Domain name: ")
+	// if _, err = fmt.Scanln(&domainName); err != nil {
+	// 	return
+	// }
 
 	fmt.Print("Email address: ")
 	if _, err = fmt.Scanln(&email); err != nil {
