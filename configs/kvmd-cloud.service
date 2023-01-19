@@ -1,6 +1,5 @@
 [Unit]
 Description=PiKVM - Cloud agent
-After=kvmd.service
 
 [Service]
 User=kvmd-cloud
@@ -11,3 +10,6 @@ RestartSec=3
 
 ExecStart=/usr/bin/kvmd-cloud --run
 TimeoutStopSec=3
+
+[Install]
+WantedBy=multi-user.target
