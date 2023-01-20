@@ -110,7 +110,7 @@ func askCreds() (agentName string, token string, domainName string, email string
 	}
 	token = string(b)
 
-	domainName = agentName + "." + baseDomain
+	domainName = agentName + ".test." + baseDomain
 	// fmt.Print("Domain name: ")
 	// if _, err = fmt.Scanln(&domainName); err != nil {
 	// 	return
