@@ -13,6 +13,9 @@ source=(
 	pkg.install
 )
 md5sums=(SKIP SKIP)
+backup=(
+	etc/kvmd/cloud/cloud.yaml
+)
 
 
 build() {
@@ -35,4 +38,6 @@ package() {
 
 	mkdir -p "$pkgdir/etc/kvmd/cloud/ssl"
 	chmod 755 "$pkgdir/etc/kvmd/cloud/ssl"
+
+	cp configs/cloud.yaml "$pkgdir/etc/kvmd/cloud"
 }
