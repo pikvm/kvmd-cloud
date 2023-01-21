@@ -201,7 +201,7 @@ func checkLocalAuth() error {
 		return err
 	}
 	if res.StatusCode == 200 {
-		return fmt.Errorf("in order to use cloud, it's required to set a new strong password (follow the change passwords instructions %s)", checkPasswordsWikiUrl)
+		return fmt.Errorf("in order to use cloud, it's required to set a new strong password (follow the change passwords instructions: %s)", checkPasswordsWikiUrl)
 	} else if res.StatusCode != 403 {
 		return fmt.Errorf("weird status code %d for %s with default password", res.StatusCode, authCheckUrl)
 	}
