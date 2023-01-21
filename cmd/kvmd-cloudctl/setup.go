@@ -2,11 +2,14 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	_ "embed"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"syscall"
+	"time"
 
 	"github.com/pikvm/kvmd-cloud/internal/config"
 	"github.com/pikvm/kvmd-cloud/internal/hive"
@@ -18,9 +21,11 @@ import (
 )
 
 const (
-	authFilepath  = "/etc/kvmd/cloud/auth.yaml"
-	nginxFilepath = "/etc/kvmd/cloud/nginx.ctx-http.conf"
-	baseDomain    = "pikvm.cloud"
+	authFilepath          = "/etc/kvmd/cloud/auth.yaml"
+	nginxFilepath         = "/etc/kvmd/cloud/nginx.ctx-http.conf"
+	baseDomain            = "pikvm.cloud"
+	authCheckUrl          = "https://localhost/api/auth/check"
+	checkPasswordsWikiUrl = "https://docs.pikvm.org/first_steps/#getting-access-to-pikvm"
 )
 
 //go:embed configs/nginx.http.conf
@@ -30,6 +35,11 @@ var nginxHttpContent []byte
 var nginxHttpsContent []byte
 
 func Setup(cmd *cobra.Command, args []string) error {
+	log.Info("Checking local authorization status")
+	if err := checkLocalAuth(); err != nil {
+		return fmt.Errorf("local auth check failed: %w", err)
+	}
+
 	agentName, token, domainName, email, err := askCreds()
 	if err != nil {
 		return err
@@ -76,7 +86,8 @@ func Setup(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("unable to install certificate: %w", err)
 	}
 
-	log.Info("Done.")
+	log.Info("Done. Please, ensure that you password is strong enough")
+	log.Info("Your system is accessible externally via https://" + domainName)
 
 	return nil
 }
@@ -152,6 +163,47 @@ func saveAuthData() error {
 	}
 	if err = os.WriteFile(authFilepath, out, 0644); err != nil {
 		return err
+	}
+	return nil
+}
+
+func checkLocalAuth() error {
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := http.Client{
+		Timeout:   1 * time.Second,
+		Transport: tr,
+	}
+	req, err := http.NewRequest("GET", authCheckUrl, nil)
+	if err != nil {
+		return err
+	}
+	res, err := client.Do(req)
+	if err != nil {
+		fmt.Printf("%#v", err)
+		return err
+	}
+	res.Body.Close()
+	if res.StatusCode == 200 {
+		return fmt.Errorf("local authorization disabled. Please, enable authorization and set a strong password")
+	} else if res.StatusCode != 401 {
+		return fmt.Errorf("weird status code %d for %s with no password", res.StatusCode, authCheckUrl)
+	}
+	req, err = http.NewRequest("GET", authCheckUrl, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("X-KVMD-User", "admin")
+	req.Header.Set("X-KVMD-Passwd", "admin")
+	res, err = client.Do(req)
+	if err != nil {
+		return err
+	}
+	if res.StatusCode == 200 {
+		return fmt.Errorf("in order to use cloud, it's required to set a new strong password (follow the change passwords instructions %s)", checkPasswordsWikiUrl)
+	} else if res.StatusCode != 403 {
+		return fmt.Errorf("weird status code %d for %s with default password", res.StatusCode, authCheckUrl)
 	}
 	return nil
 }
