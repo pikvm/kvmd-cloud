@@ -1,0 +1,5 @@
+name: Cloud
+description: PiKVM Cloud Agent
+path: cloud
+daemon: kvmd-cloud
+place: -1
