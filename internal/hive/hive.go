@@ -5,37 +5,38 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
+	"os"
 
-	hive_pb "github.com/pikvm/cloud-api/hive_for_agent"
+	hive_pb "github.com/pikvm/cloud-api/proto/hive"
 	"github.com/pikvm/kvmd-cloud/internal/config"
 	"github.com/pikvm/kvmd-cloud/internal/config/vars"
-	"github.com/pikvm/kvmd-cloud/internal/util"
-	log "github.com/sirupsen/logrus"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
+	"github.com/sirupsen/logrus"
+	"github.com/xornet-sl/go-xrpc/xrpc"
+	"google.golang.org/grpc/metadata"
 )
 
 type HiveConnection struct {
-	Ctx        context.Context
-	Addr       string
-	GrpcConn   *grpc.ClientConn
-	HiveClient hive_pb.HiveForAgentClient
-	Events     HiveEventsChannel
+	ctx    context.Context
+	Addr   string
+	Rpc    *xrpc.RpcConn
+	Client hive_pb.HiveForAgentClient
 }
 
 var (
-	hiveConnection *HiveConnection = nil
+	hiveConnection *HiveConnection = nil // TODO: multi-hive
 )
 
-func loadTLSCredentials() (credentials.TransportCredentials, error) {
+func (this *HiveConnection) Context() context.Context {
+	return this.ctx
+}
+
+func loadTLSCredentials() (*tls.Config, error) {
 	certPool, err := x509.SystemCertPool()
 	if err != nil {
 		return nil, err
 	}
 	if config.Cfg.SSL.Ca != "" {
-		caCert, err := ioutil.ReadFile(config.Cfg.SSL.Ca)
+		caCert, err := os.ReadFile(config.Cfg.SSL.Ca)
 		if err != nil {
 			return nil, err
 		}
@@ -44,7 +45,7 @@ func loadTLSCredentials() (credentials.TransportCredentials, error) {
 	config := &tls.Config{
 		RootCAs: certPool,
 	}
-	return credentials.NewTLS(config), nil
+	return config, nil
 }
 
 func Dial(ctx context.Context) (*HiveConnection, error) {
@@ -53,62 +54,66 @@ func Dial(ctx context.Context) (*HiveConnection, error) {
 	}
 	addr := config.Cfg.Hive.Endpoints[0]
 
-	auth_md := map[string]string{
-		"agent_uuid": vars.InstanceUUID,
-		"agent_name": config.Cfg.AgentName,
+	opts := []xrpc.Option{
+		xrpc.WithOnLogCallback(onLog),
+		xrpc.WithOnDebugLogCallback(onDebugLog),
+		xrpc.WithConnOpenCallback(onOpen),
+		xrpc.WithConnClosedCallback(onClosed),
 	}
-	var transportCred grpc.DialOption
-	if config.Cfg.NoSSL {
-		transportCred = grpc.WithTransportCredentials(insecure.NewCredentials())
-	} else {
-		tlsCredential, err := loadTLSCredentials()
+
+	if !config.Cfg.NoSSL {
+		tlsConfig, err := loadTLSCredentials()
 		if err != nil {
 			return nil, err
 		}
-		transportCred = grpc.WithTransportCredentials(tlsCredential)
+		opts = append(opts, xrpc.WithTLSConfig(tlsConfig))
 	}
-	conn, err := grpc.DialContext(
-		ctx,
-		addr,
-		transportCred,
-		grpc.WithPerRPCCredentials(util.NewRPCCred(auth_md, config.Cfg.AuthToken)),
-	)
+
+	auth_md := metadata.New(map[string]string{
+		"authorization": "bearer " + config.Cfg.AuthToken,
+		"agent_name":    config.Cfg.AgentName,
+		"agent_uuid":    vars.InstanceUUID,
+		"version":       vars.GetVersion(),
+	})
+	ctx = metadata.NewOutgoingContext(ctx, auth_md)
+
+	client := xrpc.NewClient()
+	// TODO: AgentForHive service
+	conn, err := client.Dial(ctx, addr, opts...)
 	if err != nil {
 		return nil, err
 	}
-	c := hive_pb.NewHiveForAgentClient(conn)
-	log.Debugf("connected to hive %s", addr)
+
 	hiveConnection = &HiveConnection{
-		Ctx:        ctx,
-		Addr:       addr,
-		GrpcConn:   conn,
-		HiveClient: c,
-		Events: HiveEventsChannel{
-			Stream:          nil,
-			SendEventsQueue: make(chan *EventSendPacket),
-		},
+		ctx:    conn.Context(),
+		Addr:   addr,
+		Rpc:    conn,
+		Client: hive_pb.NewHiveForAgentClient(conn),
 	}
 
 	return hiveConnection, nil
 }
 
-func CertbotAdd(ctx context.Context, domainName string, txt string) error {
-	if hiveConnection == nil {
-		return fmt.Errorf("not connected to hive")
-	}
-	_, err := hiveConnection.HiveClient.CertbotAdd(ctx, &hive_pb.CertbotDomainName{
-		DomainName: domainName,
-		Txt:        txt,
-	})
-	return err
+func onOpen(ctx context.Context, conn *xrpc.RpcConn) (context.Context, error) {
+	logrus.Debugf("connected to hive %s", conn.RemoteAddr().String())
+	return nil, nil
 }
 
-func CertbotDel(ctx context.Context, domainName string) error {
-	if hiveConnection == nil {
-		return fmt.Errorf("not connected to hive")
+func onClosed(ctx context.Context, conn *xrpc.RpcConn, closeError error) {
+	logrus.Debugf("connection to hive %s lost", conn.RemoteAddr().String())
+}
+
+func onLog(logContext *xrpc.LogContext, err error, msg string) {
+	if err != nil {
+		logrus.WithFields(logContext.Fields).WithError(err).Error(msg)
+	} else {
+		logrus.WithFields(logContext.Fields).Debug(msg)
 	}
-	_, err := hiveConnection.HiveClient.CertbotDel(ctx, &hive_pb.CertbotDomainName{
-		DomainName: domainName,
-	})
-	return err
+}
+
+func onDebugLog(fn xrpc.DebugLogGetter) {
+	if config.Cfg.Log.Trace {
+		logContext, msg := fn()
+		onLog(logContext, nil, fmt.Sprintf("debug: %s", msg))
+	}
 }

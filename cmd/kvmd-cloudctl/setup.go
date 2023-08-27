@@ -16,7 +16,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
-	"google.golang.org/protobuf/types/known/emptypb"
 	"gopkg.in/yaml.v2"
 )
 
@@ -76,6 +75,8 @@ func Setup(cmd *cobra.Command, args []string) error {
 	}); err != nil {
 		return fmt.Errorf("unable to get certificate: %w", err)
 	}
+	nginxAffected := true
+	defer restoreNginx(nginxAffected)
 	if err := os.WriteFile(nginxFilepath, nginxHttpsContent, 0664); err != nil {
 		return fmt.Errorf("unable to write nginx configuration: %w", err)
 	}
@@ -89,6 +90,7 @@ func Setup(cmd *cobra.Command, args []string) error {
 	log.Info("Done. Please, ensure that you password is strong enough")
 	log.Info("Your system is accessible externally via https://" + domainName)
 
+	nginxAffected = false
 	return nil
 }
 
@@ -138,12 +140,8 @@ func askCreds() (agentName string, token string, domainName string, email string
 func tryAuthorize(ctx context.Context) error {
 	authCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	conn, err := hive.Dial(authCtx)
+	_, err := hive.Dial(authCtx)
 	if err != nil {
-		return err
-	}
-	defer conn.GrpcConn.Close()
-	if _, err = conn.HiveClient.AuthCheck(authCtx, &emptypb.Empty{}); err != nil {
 		return err
 	}
 	return nil
@@ -206,4 +204,8 @@ func checkLocalAuth() error {
 		return fmt.Errorf("weird status code %d for %s with default password", res.StatusCode, authCheckUrl)
 	}
 	return nil
+}
+
+func restoreNginx(nginxAffected bool) {
+	// TODO:
 }
