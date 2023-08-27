@@ -5,12 +5,12 @@ go 1.20
 require (
 	github.com/gin-gonic/gin v1.9.1
 	github.com/google/uuid v1.3.1
-	github.com/pikvm/cloud-api v0.0.0-20230116002754-6e0a16450e2b
+	github.com/pikvm/cloud-api v0.0.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5
 	github.com/toorop/gin-logrus v0.0.0-20210225092905-2c785434f26f
-	github.com/xornet-sl/go-xrpc v0.0.0-20230816231221-f1116f39f0b3
+	github.com/xornet-sl/go-xrpc v0.0.1
 	github.com/xornet-sl/xcommon v0.0.0-20221010170557-45d6e739d7c7
 	golang.org/x/sync v0.3.0
 	google.golang.org/grpc v1.57.0
