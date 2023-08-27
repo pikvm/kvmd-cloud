@@ -34,6 +34,9 @@ func (this *ProxyServer) ConnectionChannel(stream agent_pb.AgentForProxy_Connect
 	}
 	cid := header.GetCid()
 	connectTo := header.GetConnectTo()
+	logFields := logrus.Fields{
+		"cid": cid,
+	}
 
 	var conn net.Conn
 	if connectTo[0] == '/' {
@@ -55,32 +58,36 @@ func (this *ProxyServer) ConnectionChannel(stream agent_pb.AgentForProxy_Connect
 		return nil
 	}
 
-	logrus.Debugf("Connection cid:%s created", cid)
-	defer logrus.Debugf("Connection cid:%s closed", cid)
+	logrus.WithFields(logFields).Debug("Connection created")
+	defer logrus.WithFields(logFields).Debug("Connection closed")
 	defer conn.Close()
 
 	senderError := make(chan error)
 	receiverError := make(chan error)
 
-	// Proxy -> Inner
+	// Proxy -> Inner socket
 	go func() {
 		defer close(senderError)
 		for {
 			msg, err := stream.Recv()
-			if errors.Is(err, io.EOF) || errors.Is(err, xrpc.StreamClosedError) {
+			if isNetConnClosedErr(err) || errors.Is(err, xrpc.StreamClosedError) {
 				// Connection closed on proxy's side
+				logrus.WithFields(logFields).Trace("proxy->inner rpc read closed")
 				conn.Close()
 				return
 			}
 			if err != nil {
-				logrus.WithError(err).Errorf("error while getting data from proxy")
+				logrus.WithFields(logFields).WithError(err).Errorf("error while getting data from proxy")
 				conn.Close()
 				senderError <- err
 				return
 			}
 			chunk := msg.GetChunk()
-			if _, err := conn.Write(chunk); err != nil {
-				logrus.WithError(err).Errorf("unable to send data to inner connection")
+			logrus.WithFields(logFields).Tracef("proxy->inner rpc received %d bytes", len(chunk))
+			n, err := conn.Write(chunk)
+			logrus.WithFields(logFields).Tracef("inner written %d bytes", n)
+			if err != nil {
+				logrus.WithFields(logFields).WithError(err).Errorf("unable to send data to inner connection")
 				conn.Close()
 				// apiHandler.Notify(apiHandler.Ctx, "connectionClosed", connection.Cid)
 				senderError <- err
@@ -88,7 +95,7 @@ func (this *ProxyServer) ConnectionChannel(stream agent_pb.AgentForProxy_Connect
 			}
 		}
 	}()
-	// Inner -> Proxy
+	// Inner socket -> Proxy
 	go func() {
 		defer close(receiverError)
 		readCloserChan := make(chan struct{})
@@ -102,13 +109,14 @@ func (this *ProxyServer) ConnectionChannel(stream agent_pb.AgentForProxy_Connect
 			}
 		}()
 		defer close(readCloserChan)
-		buff := make([]byte, 2048)
+		buff := make([]byte, 8192)
 		for {
 			n, err := conn.Read(buff)
+			logrus.WithFields(logFields).WithError(err).Tracef("inner read: %d bytes", n)
 			if isNetConnClosedErr(err) {
 				return
 			} else if err != nil {
-				logrus.WithError(err).Errorf("error reading from inner connection")
+				logrus.WithFields(logFields).WithError(err).Errorf("error reading from inner connection")
 				conn.Close()
 				receiverError <- err
 				return
@@ -119,15 +127,17 @@ func (this *ProxyServer) ConnectionChannel(stream agent_pb.AgentForProxy_Connect
 				},
 			})
 			if errors.Is(err, xrpc.StreamClosedError) {
+				logrus.WithFields(logFields).WithError(err).Tracef("inner->proxy rpc send closed")
 				conn.Close()
 				return
 			}
 			if err != nil {
-				logrus.WithError(err).Errorf("unable to send data to proxy")
+				logrus.WithFields(logFields).WithError(err).Errorf("unable to send data to proxy")
 				conn.Close()
 				receiverError <- err
 				return
 			}
+			logrus.WithFields(logFields).Tracef("inner->proxy rpc sent %d bytes", n)
 		}
 	}()
 

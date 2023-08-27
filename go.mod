@@ -10,7 +10,7 @@ require (
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5
 	github.com/toorop/gin-logrus v0.0.0-20210225092905-2c785434f26f
-	github.com/xornet-sl/go-xrpc v0.0.1
+	github.com/xornet-sl/go-xrpc v0.0.2
 	github.com/xornet-sl/xcommon v0.0.0-20221010170557-45d6e739d7c7
 	golang.org/x/sync v0.3.0
 	google.golang.org/grpc v1.57.0
