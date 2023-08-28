@@ -84,7 +84,7 @@ func Dial(ctx context.Context, proxyInfo *hive_pb.AvailableProxies_ProxyInfo) (*
 	}
 
 	proxyConnection = &ProxyConnection{
-		ctx:  ctx,
+		ctx:  conn.Context(),
 		Addr: addr,
 		Rpc:  conn,
 	}

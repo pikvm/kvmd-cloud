@@ -106,6 +106,7 @@ func ProxyGuard(ctx context.Context, proxyInfo *hive_pb.AvailableProxies_ProxyIn
 			continue
 		}
 		proxyCtx := proxyConnection.Context()
+		attempt = 0
 
 		<-proxyCtx.Done()
 		select {
