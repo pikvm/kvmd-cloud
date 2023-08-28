@@ -17,21 +17,5 @@ func init() {
 		Debug = false
 	}
 
-	if Commit == "" {
-		VersionString = fmt.Sprintf("%s (ver: %s)", AppName, Version)
-	} else {
-		VersionString = fmt.Sprintf("%s (ver: %s [%s])", AppName, Version, Commit)
-	}
-}
-
-func GetVersion() string {
-	if Debug {
-		return fmt.Sprintf("%s version %s @ %s", AppName, Version, Commit)
-	} else {
-		return fmt.Sprintf("%s version %s", AppName, Version)
-	}
-}
-
-func PrintVersion() {
-	println(GetVersion())
+	VersionString = fmt.Sprintf("%s %s [%s]", AppName, Version, Commit)
 }

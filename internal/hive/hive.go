@@ -73,7 +73,7 @@ func Dial(ctx context.Context) (*HiveConnection, error) {
 		"authorization": "bearer " + config.Cfg.AuthToken,
 		"agent_name":    config.Cfg.AgentName,
 		"agent_uuid":    vars.InstanceUUID,
-		"version":       vars.GetVersion(),
+		"version":       vars.VersionString,
 	})
 	ctx = metadata.NewOutgoingContext(ctx, auth_md)
 

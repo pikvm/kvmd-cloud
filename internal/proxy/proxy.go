@@ -70,7 +70,7 @@ func Dial(ctx context.Context, proxyInfo *hive_pb.AvailableProxies_ProxyInfo) (*
 		"authorization": "bearer " + config.Cfg.AuthToken,
 		"agent_name":    config.Cfg.AgentName,
 		"agent_uuid":    vars.InstanceUUID,
-		"version":       vars.GetVersion(),
+		"version":       vars.VersionString,
 	})
 	ctx = metadata.NewOutgoingContext(ctx, auth_md)
 
