@@ -76,7 +76,7 @@ func Setup(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("unable to get certificate: %w", err)
 	}
 	nginxAffected := true
-	defer restoreNginx(nginxAffected)
+	defer func() { restoreNginx(nginxAffected) }()
 	if err := os.WriteFile(nginxFilepath, nginxHttpsContent, 0664); err != nil {
 		return fmt.Errorf("unable to write nginx configuration: %w", err)
 	}
@@ -207,5 +207,16 @@ func checkLocalAuth() error {
 }
 
 func restoreNginx(nginxAffected bool) {
-	// TODO:
+	if !nginxAffected {
+		return
+	}
+	log.Info("Reverting nginx http configuration for letsencrypt...")
+	if err := os.WriteFile(nginxFilepath, nginxHttpContent, 0644); err != nil {
+		log.WithError(err).Error("unable to write nginx configuration")
+		return
+	}
+	if err := launchCmd([]string{"systemctl", "restart", "kvmd-nginx"}); err != nil {
+		log.WithError(err).Error("unable to restart nginx")
+		return
+	}
 }
