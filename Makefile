@@ -37,7 +37,7 @@ GIT_STATUS      := invalid
 endif
 
 ifneq ($(GIT_TAG),)
-VERSION         ?= $(GIT_TAG)
+VERSION         ?= $(GIT_TAG:v%=%)
 else
 VERSION         ?= dev
 endif

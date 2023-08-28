@@ -1,6 +1,9 @@
 package vars
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 var (
 	AppName       = ""
@@ -17,5 +20,10 @@ func init() {
 		Debug = false
 	}
 
-	VersionString = fmt.Sprintf("%s %s [%s]", AppName, Version, Commit)
+	Version, _ = strings.CutPrefix(Version, "v")
+	if Commit == "" {
+		VersionString = fmt.Sprintf("%s version %s", AppName, Version)
+	} else {
+		VersionString = fmt.Sprintf("%s version %s [%s]", AppName, Version, Commit)
+	}
 }
