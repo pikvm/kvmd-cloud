@@ -26,5 +26,6 @@ func getGlobalFlags() *pflag.FlagSet {
 	commonFlags.AddFlagSet(getLogFlags())
 	commonFlags.Bool("run", false, "without this flag agent won't start")
 	commonFlags.String("unix_ctl_socket", DefaultConfig["unix_ctl_socket"].(string), "local ctl socket file")
+	commonFlags.Bool("version", false, "display version and exit")
 	return commonFlags
 }

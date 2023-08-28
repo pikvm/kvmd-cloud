@@ -27,8 +27,8 @@ SRCDIRS         := $(wildcard $(CURDIR)/src $(CURDIR)/internal $(CURDIR)/pkg)
 SRC             := $(shell find $(SRCDIRS) -type f -iname '*.go' -print)
 CMD_SRC         = $(shell find $(CURDIR)/cmd/$(notdir $@) -type f -iname '*.go' -print)
 
-GIT_COMMIT      := $(shell git rev-parse HEAD 2>/dev/null)
-GIT_SHA         := $(shell git rev-parse --short HEAD 2>/dev/null)
+GIT_COMMIT      := $(shell git rev-parse --short HEAD 2>/dev/null)
+GIT_SHA         := $(shell git rev-parse HEAD 2>/dev/null)
 GIT_TAG         := $(shell git describe --tags --abbrev=0 --match='v*' --candidates=1 2>/dev/null)
 GIT_STATUS      := $(shell test -n "`git status --porcelain 2>/dev/null`" && echo "dirty" || echo "clean")
 
@@ -42,9 +42,10 @@ else
 VERSION         ?= "dev"
 endif
 
-VARMODULE        := $(MODNAME)/config
+VARMODULE        := $(MODNAME)/internal/config/vars
 LDFLAGS += -X $(VARMODULE).Version=$(VERSION)
 LDFLAGS += -X $(VARMODULE).Commit=$(GIT_COMMIT)
+LDFLAGS += -X $(VARMODULE).CommitSHA=$(GIT_SHA)
 ifeq ($(RELEASE),1)
 LDFLAGS += -X $(VARMODULE)._build=release
 else

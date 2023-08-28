@@ -20,6 +20,13 @@ import (
 func root(rootCmd *cobra.Command, args []string) error {
 	group, ctx := errgroup.WithContext(rootCmd.Context())
 
+	if ok, err := rootCmd.Flags().GetBool("version"); err != nil {
+		return err
+	} else if ok {
+		println(vars.VersionString)
+		return nil
+	}
+
 	if ok, err := rootCmd.Flags().GetBool("run"); err != nil {
 		return err
 	} else if !ok {
