@@ -39,7 +39,7 @@ endif
 ifneq ($(GIT_TAG),)
 VERSION         ?= $(GIT_TAG)
 else
-VERSION         ?= "dev"
+VERSION         ?= dev
 endif
 
 VARMODULE        := $(MODNAME)/internal/config/vars
