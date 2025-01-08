@@ -20,7 +20,9 @@ endif
 GOFLAGS         :=
 
 ifneq ($(wildcard $(CURDIR)/.env/.),)
+ifneq ($(NO_DOT_ENV),1)
 TAGS            += envishere
+endif
 endif
 
 SRCDIRS         := $(wildcard $(CURDIR)/src $(CURDIR)/internal $(CURDIR)/pkg)
@@ -112,7 +114,7 @@ clean:
 	@rm -rf '$(BINDIR)'
 
 .PHONY: mrpopper
-mrpopper: clean
+mrpropper: clean
 	@rm -rf '$(GOCACHE)'
 
 
@@ -124,6 +126,9 @@ info:
 	 @echo "Git Tag:           $(GIT_TAG)"
 	 @echo "Git Commit:        $(GIT_COMMIT)"
 	 @echo "Git Tree Status:   $(GIT_STATUS)"
+
+cloc:
+	@cloc --include-lang=Go --fullpath --skip-uniqueness cmd internal
 
 
 ###################################
@@ -146,6 +151,26 @@ dump-all:
 	    $(info $(shell printf "%-20s" "$(v)")= $(value $(v))) \
 	)
 
+###################################
+# Docker
+
+.PHONY: modsync
+modsync:
+	go get -u all
+	go mod tidy
+	go mod vendor
+
+.PHONY: docker-build
+docker-build:
+#	docker build -t local/cloud-agent .
+	docker buildx build --platform linux/amd64 -t local/cloud-agent .
+
+.PHONY: mini-deploy
+mini-deploy:
+	eval $$(minikube docker-env) && \
+		minikube kubectl -- delete -f k8s/mini.yaml && \
+		docker buildx build --platform linux/amd64 -t local/cloud-agent:latest . && \
+		minikube kubectl -- apply -f k8s/mini.yaml
 
 ###################################
 release:

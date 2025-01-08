@@ -8,23 +8,28 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/pikvm/kvmd-cloud/internal/config"
-	"github.com/pikvm/kvmd-cloud/internal/ctl"
-	log "github.com/sirupsen/logrus"
+	"github.com/pikvm/kvmd-cloud/internal/ctl/status"
+	"github.com/sirupsen/logrus"
 	ginlogrus "github.com/toorop/gin-logrus"
 )
 
+func setupRoutes(r *gin.Engine) {
+	status.SetupRoutes(r)
+	// ...
+}
+
 func RunServer(ctx context.Context) error {
-	if log.GetLevel() < log.DebugLevel {
+	if logrus.GetLevel() < logrus.DebugLevel {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	r := gin.New()
-	r.Use(ginlogrus.Logger(log.StandardLogger()), gin.Recovery())
+	r.Use(ginlogrus.Logger(logrus.StandardLogger()), gin.Recovery())
 	setupRoutes(r)
 
 	srv := &http.Server{
 		Handler: r,
 	}
-	log.Warn(config.Cfg.UnixCtlSocket)
+	logrus.Warn(config.Cfg.UnixCtlSocket)
 	unixListener, err := net.Listen("unix", config.Cfg.UnixCtlSocket)
 	if err != nil {
 		return err
@@ -33,7 +38,7 @@ func RunServer(ctx context.Context) error {
 	var serveStopError error
 	runErrorChan := make(chan error)
 	go func() {
-		log.Info("Listening on unix socket ", config.Cfg.UnixCtlSocket)
+		logrus.Info("Listening on unix socket ", config.Cfg.UnixCtlSocket)
 		serveStopError = srv.Serve(unixListener)
 		runErrorChan <- serveStopError
 		close(runErrorChan)
@@ -47,11 +52,11 @@ func RunServer(ctx context.Context) error {
 	}
 
 	if stopRequested {
-		log.Info("UNIX socket server requested to stop. Trying to do it gracefully")
+		logrus.Info("UNIX socket server requested to stop. Trying to do it gracefully")
 		graceCtx, graceCancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 		defer graceCancel()
 		if err := srv.Shutdown(graceCtx); err != nil {
-			log.WithError(err).Error("UNIX socket server graceful shutdown error")
+			logrus.WithError(err).Error("UNIX socket server graceful shutdown error")
 			return err
 		}
 
@@ -62,20 +67,10 @@ func RunServer(ctx context.Context) error {
 	}
 	if serveStopError == http.ErrServerClosed {
 		serveStopError = nil
-		log.Info("UNIX socket server stopped")
+		logrus.Info("UNIX socket server stopped")
 	} else {
-		log.WithError(serveStopError).Error("UNIX socket server stopped")
+		logrus.WithError(serveStopError).Error("UNIX socket server stopped")
 	}
 
 	return serveStopError
-}
-
-func setupRoutes(r *gin.Engine) {
-	r.GET("/status", getStatus)
-}
-
-func getStatus(c *gin.Context) {
-	c.JSON(200, ctl.ApplicationStatusResponse{
-		PingerField: "Yahoo!!",
-	})
 }

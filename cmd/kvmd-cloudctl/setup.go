@@ -13,10 +13,10 @@ import (
 
 	"github.com/pikvm/kvmd-cloud/internal/config"
 	"github.com/pikvm/kvmd-cloud/internal/hive"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -34,7 +34,7 @@ var nginxHttpContent []byte
 var nginxHttpsContent []byte
 
 func Setup(cmd *cobra.Command, args []string) error {
-	log.Info("Checking local authorization status")
+	logrus.Info("Checking local authorization status")
 	if err := checkLocalAuth(); err != nil {
 		return fmt.Errorf("local auth check failed: %w", err)
 	}
@@ -46,18 +46,18 @@ func Setup(cmd *cobra.Command, args []string) error {
 	config.Cfg.AgentName = agentName
 	config.Cfg.AuthToken = token
 
-	log.Info("Performing authorization attempt...")
+	logrus.Info("Performing authorization attempt...")
 	if err := tryAuthorize(cmd.Context()); err != nil {
 		return fmt.Errorf("authorization failed: %w", err)
 	}
-	log.Info("Authorization successful")
+	logrus.Info("Authorization successful")
 
 	if err := saveAuthData(); err != nil {
 		return fmt.Errorf("unable to save authorization data: %w", err)
 	}
-	log.Info("Authorization information saved")
+	logrus.Info("Authorization information saved")
 
-	log.Info("Preparing http configuration for letsencrypt...")
+	logrus.Info("Preparing http configuration for letsencrypt...")
 	if err := os.WriteFile(nginxFilepath, nginxHttpContent, 0644); err != nil {
 		return fmt.Errorf("unable to write nginx configuration: %w", err)
 	}
@@ -67,7 +67,7 @@ func Setup(cmd *cobra.Command, args []string) error {
 	if err := launchCmd([]string{"systemctl", "enable", "--now", "kvmd-cloud"}); err != nil {
 		return fmt.Errorf("unable to start kvmd-cloud agent: %w", err)
 	}
-	log.Info("Requesting letsencrypt SSL certificate...")
+	logrus.Info("Requesting letsencrypt SSL certificate...")
 	if err := launchCmd([]string{
 		"kvmd-certbot", "certonly_webroot", "--agree-tos", "-n",
 		"--email", email,
@@ -87,8 +87,8 @@ func Setup(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("unable to install certificate: %w", err)
 	}
 
-	log.Info("Done. Please, ensure that you password is strong enough")
-	log.Info("Your system is accessible externally via https://" + domainName)
+	logrus.Info("Done. Please, ensure that you password is strong enough")
+	logrus.Info("Your system is accessible externally via https://" + domainName)
 
 	nginxAffected = false
 	return nil
@@ -210,13 +210,13 @@ func restoreNginx(nginxAffected bool) {
 	if !nginxAffected {
 		return
 	}
-	log.Info("Reverting nginx http configuration for letsencrypt...")
+	logrus.Info("Reverting nginx http configuration for letsencrypt...")
 	if err := os.WriteFile(nginxFilepath, nginxHttpContent, 0644); err != nil {
-		log.WithError(err).Error("unable to write nginx configuration")
+		logrus.WithError(err).Error("unable to write nginx configuration")
 		return
 	}
 	if err := launchCmd([]string{"systemctl", "restart", "kvmd-nginx"}); err != nil {
-		log.WithError(err).Error("unable to restart nginx")
+		logrus.WithError(err).Error("unable to restart nginx")
 		return
 	}
 }

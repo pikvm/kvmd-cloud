@@ -4,7 +4,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	ctlclient "github.com/pikvm/kvmd-cloud/internal/ctl/ctlClient"
+	ctlclient "github.com/pikvm/kvmd-cloud/cmd/kvmd-cloudctl/ctlClient"
 )
 
 var rootCmd = cobra.Command{

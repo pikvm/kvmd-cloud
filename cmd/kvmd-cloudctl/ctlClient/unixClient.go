@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 
@@ -47,7 +46,7 @@ func DoUnixRequestJSON(ctx context.Context, method string, url string, body inte
 	if err != nil {
 		return err
 	}
-	responseBytes, err := ioutil.ReadAll(resp.Body)
+	responseBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
