@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 
-	hive_pb "github.com/pikvm/cloud-api/proto/hive"
+	hiveagent_pb "github.com/pikvm/cloud-api/proto/hiveagent"
 	"github.com/pikvm/kvmd-cloud/internal/config"
 	"github.com/pikvm/kvmd-cloud/internal/config/vars"
 	"github.com/sirupsen/logrus"
@@ -19,7 +19,7 @@ type HiveConnection struct {
 	ctx    context.Context
 	Addr   string
 	Rpc    *xrpc.RpcConn
-	Client hive_pb.HiveForAgentClient
+	Client hiveagent_pb.HiveForAgentClient
 }
 
 var (
@@ -88,7 +88,7 @@ func Dial(ctx context.Context) (*HiveConnection, error) {
 		ctx:    conn.Context(),
 		Addr:   addr,
 		Rpc:    conn,
-		Client: hive_pb.NewHiveForAgentClient(conn),
+		Client: hiveagent_pb.NewHiveForAgentClient(conn),
 	}
 
 	return hiveConnection, nil

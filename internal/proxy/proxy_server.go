@@ -8,17 +8,17 @@ import (
 	"net"
 	"syscall"
 
-	agent_pb "github.com/pikvm/cloud-api/proto/agent"
+	proxyagent_pb "github.com/pikvm/cloud-api/proto/proxyagent"
 	"github.com/sirupsen/logrus"
 	"github.com/xornet-sl/go-xrpc/xrpc"
 )
 
 type ProxyServer struct {
 	ctx context.Context
-	agent_pb.UnimplementedAgentForProxyServer
+	proxyagent_pb.UnimplementedAgentForProxyServer
 }
 
-func (this *ProxyServer) ConnectionChannel(stream agent_pb.AgentForProxy_ConnectionChannelServer) error {
+func (this *ProxyServer) ConnectionChannel(stream proxyagent_pb.AgentForProxy_ConnectionChannelServer) error {
 	msg, err := stream.Recv()
 	if errors.Is(err, xrpc.StreamClosedError) {
 		return nil
@@ -48,9 +48,9 @@ func (this *ProxyServer) ConnectionChannel(stream agent_pb.AgentForProxy_Connect
 		return err
 	}
 
-	if err := stream.Send(&agent_pb.ConnectionMessage{
-		Body: &agent_pb.ConnectionMessage_HeaderResponse_{
-			HeaderResponse: &agent_pb.ConnectionMessage_HeaderResponse{
+	if err := stream.Send(&proxyagent_pb.ConnectionMessage{
+		Body: &proxyagent_pb.ConnectionMessage_HeaderResponse_{
+			HeaderResponse: &proxyagent_pb.ConnectionMessage_HeaderResponse{
 				Error: "",
 			},
 		},
@@ -121,8 +121,8 @@ func (this *ProxyServer) ConnectionChannel(stream agent_pb.AgentForProxy_Connect
 				receiverError <- err
 				return
 			}
-			err = stream.Send(&agent_pb.ConnectionMessage{
-				Body: &agent_pb.ConnectionMessage_Chunk{
+			err = stream.Send(&proxyagent_pb.ConnectionMessage{
+				Body: &proxyagent_pb.ConnectionMessage_Chunk{
 					Chunk: buff[:n],
 				},
 			})

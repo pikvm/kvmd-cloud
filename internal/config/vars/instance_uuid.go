@@ -1,14 +1,11 @@
 package vars
 
-import (
-	"github.com/google/uuid"
-)
+import "github.com/segmentio/ksuid"
 
 var (
 	InstanceUUID string
 )
 
 func init() {
-	uuid := uuid.New()
-	InstanceUUID = uuid.String()
+	InstanceUUID = ksuid.New().String()
 }

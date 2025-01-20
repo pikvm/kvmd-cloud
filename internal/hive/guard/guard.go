@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	hive_pb "github.com/pikvm/cloud-api/proto/hive"
+	hiveagent_pb "github.com/pikvm/cloud-api/proto/hiveagent"
 	"github.com/pikvm/kvmd-cloud/internal/hive"
 	"github.com/pikvm/kvmd-cloud/internal/proxy"
 	"github.com/sirupsen/logrus"
@@ -75,7 +75,7 @@ func Guard(ctx context.Context) error {
 	}
 }
 
-func ProxyGuard(ctx context.Context, proxyInfo *hive_pb.AvailableProxies_ProxyInfo) {
+func ProxyGuard(ctx context.Context, proxyInfo *hiveagent_pb.AvailableProxies_ProxyInfo) {
 	var sleepTime time.Duration
 	attempt := 0
 	veryFirstTime := true

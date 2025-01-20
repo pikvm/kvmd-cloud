@@ -11,11 +11,13 @@ import (
 	"syscall"
 	"time"
 
+	hiveagent_pb "github.com/pikvm/cloud-api/proto/hiveagent"
 	"github.com/pikvm/kvmd-cloud/internal/config"
 	"github.com/pikvm/kvmd-cloud/internal/hive"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
+	"google.golang.org/protobuf/types/known/emptypb"
 	"gopkg.in/yaml.v3"
 )
 
@@ -39,15 +41,15 @@ func Setup(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("local auth check failed: %w", err)
 	}
 
-	agentName, token, domainName, email, err := askCreds()
+	token, err := askCreds()
 	if err != nil {
 		return err
 	}
-	config.Cfg.AgentName = agentName
 	config.Cfg.AuthToken = token
 
 	logrus.Info("Performing authorization attempt...")
-	if err := tryAuthorize(cmd.Context()); err != nil {
+	info, err := tryAuthorize(cmd.Context())
+	if err != nil {
 		return fmt.Errorf("authorization failed: %w", err)
 	}
 	logrus.Info("Authorization successful")
@@ -57,38 +59,46 @@ func Setup(cmd *cobra.Command, args []string) error {
 	}
 	logrus.Info("Authorization information saved")
 
-	logrus.Info("Preparing http configuration for letsencrypt...")
-	if err := os.WriteFile(nginxFilepath, nginxHttpContent, 0644); err != nil {
-		return fmt.Errorf("unable to write nginx configuration: %w", err)
-	}
-	if err := launchCmd([]string{"systemctl", "restart", "kvmd-nginx"}); err != nil {
-		return fmt.Errorf("unable to restart nginx: %w", err)
-	}
-	if err := launchCmd([]string{"systemctl", "enable", "--now", "kvmd-cloud"}); err != nil {
-		return fmt.Errorf("unable to start kvmd-cloud agent: %w", err)
-	}
-	logrus.Info("Requesting letsencrypt SSL certificate...")
-	if err := launchCmd([]string{
-		"kvmd-certbot", "certonly_webroot", "--agree-tos", "-n",
-		"--email", email,
-		"-d", domainName,
-	}); err != nil {
-		return fmt.Errorf("unable to get certificate: %w", err)
-	}
-	nginxAffected := true
-	defer func() { restoreNginx(nginxAffected) }()
-	if err := os.WriteFile(nginxFilepath, nginxHttpsContent, 0664); err != nil {
-		return fmt.Errorf("unable to write nginx configuration: %w", err)
-	}
-	if err := launchCmd([]string{"kvmd-certbot", "install_cloud", domainName}); err != nil {
-		return fmt.Errorf("unable to install certificate: %w", err)
-	}
-	if err := launchCmd([]string{"systemctl", "enable", "--now", "kvmd-certbot.timer"}); err != nil {
-		return fmt.Errorf("unable to install certificate: %w", err)
+	httpRouters := info.GetRouters().GetHttpRouters()
+	var nginxAffected bool = false
+	if len(httpRouters) == 0 {
+		logrus.Warnf("No http routers found. Skipping letsencrypt setup")
+	} else {
+		fqdn := httpRouters[0].GetFqdn()
+		logrus.Info("Preparing http configuration for letsencrypt...")
+		if err := os.WriteFile(nginxFilepath, nginxHttpContent, 0644); err != nil {
+			return fmt.Errorf("unable to write nginx configuration: %w", err)
+		}
+		if err := launchCmd([]string{"systemctl", "restart", "kvmd-nginx"}); err != nil {
+			return fmt.Errorf("unable to restart nginx: %w", err)
+		}
+		if err := launchCmd([]string{"systemctl", "enable", "--now", "kvmd-cloud"}); err != nil {
+			return fmt.Errorf("unable to start kvmd-cloud agent: %w", err)
+		}
+		logrus.Info("Requesting letsencrypt SSL certificate...")
+		if err := launchCmd([]string{
+			"kvmd-certbot", "certonly_webroot", "--agree-tos", "-n",
+			"--email", info.GetUser().GetEmail(),
+			"-d", fqdn,
+		}); err != nil {
+			return fmt.Errorf("unable to get certificate: %w", err)
+		}
+		nginxAffected = true
+		defer func() { restoreNginx(nginxAffected) }()
+		if err := os.WriteFile(nginxFilepath, nginxHttpsContent, 0664); err != nil {
+			return fmt.Errorf("unable to write nginx configuration: %w", err)
+		}
+		if err := launchCmd([]string{"kvmd-certbot", "install_cloud", fqdn}); err != nil {
+			return fmt.Errorf("unable to install certificate: %w", err)
+		}
+		if err := launchCmd([]string{"systemctl", "enable", "--now", "kvmd-certbot.timer"}); err != nil {
+			return fmt.Errorf("unable to install certificate: %w", err)
+		}
+
+		logrus.Info("Your system is accessible externally via https://" + fqdn)
 	}
 
 	logrus.Info("Done. Please, ensure that you password is strong enough")
-	logrus.Info("Your system is accessible externally via https://" + domainName)
 
 	nginxAffected = false
 	return nil
@@ -106,13 +116,8 @@ func launchCmd(cmdParts []string) error {
 	return nil
 }
 
-func askCreds() (agentName string, token string, domainName string, email string, err error) {
+func askCreds() (token string, err error) {
 	fmt.Println("Input authorization data:")
-
-	fmt.Print("Agent name: ")
-	if _, err = fmt.Scanln(&agentName); err != nil {
-		return
-	}
 
 	fmt.Print("Authorization token: ")
 	var b []byte
@@ -123,36 +128,27 @@ func askCreds() (agentName string, token string, domainName string, email string
 	}
 	token = string(b)
 
-	domainName = agentName + ".test." + baseDomain
-	// fmt.Print("Domain name: ")
-	// if _, err = fmt.Scanln(&domainName); err != nil {
-	// 	return
-	// }
-
-	fmt.Print("Email address: ")
-	if _, err = fmt.Scanln(&email); err != nil {
-		return
-	}
-
 	return
 }
 
-func tryAuthorize(ctx context.Context) error {
+func tryAuthorize(ctx context.Context) (*hiveagent_pb.AgentInfo, error) {
 	authCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	_, err := hive.Dial(authCtx)
+	conn, err := hive.Dial(authCtx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	info, err := conn.Client.WhoAmI(authCtx, &emptypb.Empty{})
+	if err != nil {
+		return nil, err
+	}
+	return info, nil
 }
 
 func saveAuthData() error {
 	authFileContent := struct {
-		AgentName string `yaml:"agent_name"`
 		AuthToken string `yaml:"auth_token"`
 	}{
-		AgentName: config.Cfg.AgentName,
 		AuthToken: config.Cfg.AuthToken,
 	}
 	out, err := yaml.Marshal(&authFileContent)

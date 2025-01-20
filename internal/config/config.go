@@ -24,7 +24,6 @@ type Config struct {
 		Endpoints []string `json:"endpoints" mapstructure:"endpoints"`
 	} `json:"hive" mapstructure:"hive"`
 	UnixCtlSocket string `json:"unix_ctl_socket" mapstructure:"unix_ctl_socket"`
-	AgentName     string `json:"agent_name" mapstructure:"agent_name"`
 	Log           struct {
 		Level string `json:"level" mapstructure:"level"`
 		File  string `json:"file" mapstructure:"file"`
