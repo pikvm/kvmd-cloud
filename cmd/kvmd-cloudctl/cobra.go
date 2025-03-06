@@ -4,7 +4,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	ctlclient "github.com/pikvm/kvmd-cloud/cmd/kvmd-cloudctl/ctlClient"
+	"github.com/pikvm/kvmd-cloud/cmd/kvmd-cloudctl/ctl_client"
 )
 
 var rootCmd = cobra.Command{
@@ -20,7 +20,7 @@ var statusCmd = cobra.Command{
 	Use:   "status",
 	Short: "status short",
 	Long:  "status long",
-	RunE:  ctlclient.RequestStatus,
+	RunE:  ctl_client.RequestStatus,
 }
 
 var setupCmd = cobra.Command{

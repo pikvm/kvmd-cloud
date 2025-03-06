@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 
-	hiveagent_pb "github.com/pikvm/cloud-api/proto/hiveagent"
 	proxyagent_pb "github.com/pikvm/cloud-api/proto/proxyagent"
 	"github.com/pikvm/kvmd-cloud/internal/config"
 	"github.com/pikvm/kvmd-cloud/internal/config/vars"
@@ -48,9 +47,7 @@ func loadTLSCredentials() (*tls.Config, error) {
 	return config, nil
 }
 
-func Dial(ctx context.Context, proxyInfo *hiveagent_pb.AvailableProxies_ProxyInfo) (*ProxyConnection, error) {
-	addr := proxyInfo.GetProxyEndpoint()
-
+func Dial(ctx context.Context, proxyEndpoint string) (*ProxyConnection, error) {
 	opts := []xrpc.Option{
 		xrpc.WithOnLogCallback(onLog),
 		xrpc.WithOnDebugLogCallback(onDebugLog),
@@ -78,14 +75,14 @@ func Dial(ctx context.Context, proxyInfo *hiveagent_pb.AvailableProxies_ProxyInf
 	proxyagent_pb.RegisterAgentForProxyServer(client, &ProxyServer{
 		ctx: ctx,
 	})
-	conn, err := client.Dial(ctx, addr, opts...)
+	conn, err := client.Dial(ctx, proxyEndpoint, opts...)
 	if err != nil {
 		return nil, err
 	}
 
 	proxyConnection = &ProxyConnection{
 		ctx:  conn.Context(),
-		Addr: addr,
+		Addr: proxyEndpoint,
 		Rpc:  conn,
 	}
 

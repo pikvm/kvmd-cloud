@@ -49,10 +49,7 @@ func loadTLSCredentials() (*tls.Config, error) {
 }
 
 func Dial(ctx context.Context) (*HiveConnection, error) {
-	if len(config.Cfg.Hive.Endpoints) == 0 {
-		return nil, fmt.Errorf("hive endpoints not specified")
-	}
-	addr := config.Cfg.Hive.Endpoints[0]
+	addr := config.Cfg.Hive.Endpoint
 
 	opts := []xrpc.Option{
 		xrpc.WithOnLogCallback(onLog),

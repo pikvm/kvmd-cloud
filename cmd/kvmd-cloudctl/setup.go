@@ -4,21 +4,26 @@ import (
 	"context"
 	"crypto/tls"
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"syscall"
 	"time"
 
-	hiveagent_pb "github.com/pikvm/cloud-api/proto/hiveagent"
-	"github.com/pikvm/kvmd-cloud/internal/config"
-	"github.com/pikvm/kvmd-cloud/internal/hive"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/tmaxmax/go-sse"
 	"golang.org/x/term"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"gopkg.in/yaml.v3"
+
+	"github.com/pikvm/cloud-api/api_models"
+	hiveagent_pb "github.com/pikvm/cloud-api/proto/hiveagent"
+	"github.com/pikvm/kvmd-cloud/internal/config"
+	"github.com/pikvm/kvmd-cloud/internal/hive"
 )
 
 const (
@@ -36,18 +41,17 @@ var nginxHttpContent []byte
 var nginxHttpsContent []byte
 
 func Setup(cmd *cobra.Command, args []string) error {
-	logrus.Info("Checking local authorization status")
 	if err := checkLocalAuth(); err != nil {
-		return fmt.Errorf("local auth check failed: %w", err)
+		return fmt.Errorf("local kvmd auth check failed: %w", err)
 	}
 
-	token, err := askCreds()
+	token, err := obtainCreds(cmd.Context())
 	if err != nil {
 		return err
 	}
 	config.Cfg.AuthToken = token
 
-	logrus.Info("Performing authorization attempt...")
+	logrus.Info("Performing a cloud connection attempt...")
 	info, err := tryAuthorize(cmd.Context())
 	if err != nil {
 		return fmt.Errorf("authorization failed: %w", err)
@@ -114,6 +118,68 @@ func launchCmd(cmdParts []string) error {
 		return fmt.Errorf("command execution error: %w", err)
 	}
 	return nil
+}
+
+func obtainCreds(ctx context.Context) (string, error) {
+	token, err := browserAuth(ctx)
+	if err != nil || token == "" {
+		token, err = askCreds()
+		if err != nil {
+			return "", err
+		}
+	}
+	return token, nil
+}
+
+func browserAuth(ctx context.Context) (string, error) {
+	url, err := url.JoinPath(config.Cfg.Hive.Endpoint, "/agent/bootstrap")
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var token string
+	var done bool
+	var eventError error
+
+	r, err := http.NewRequestWithContext(ctx, "GET", url, http.NoBody)
+	if err != nil {
+		return "", err
+	}
+	conn := sse.NewConnection(r)
+
+	conn.SubscribeEvent("redirect", func(e sse.Event) {
+		redirect := api_models.BootstrapRedirect{}
+		err := json.Unmarshal([]byte(e.Data), &redirect)
+		if err != nil {
+			eventError = err
+			cancel()
+			return
+		}
+		fmt.Printf("Please, open the following URL in your browser and follow instructions: %s\n", redirect.RedirectURL)
+	})
+
+	conn.SubscribeEvent("result", func(e sse.Event) {
+		result := api_models.BootstrapResult{}
+		err := json.Unmarshal([]byte(e.Data), &result)
+		if err != nil {
+			eventError = err
+			cancel()
+			return
+		}
+		token = result.AuthToken
+		done = true
+		cancel()
+	})
+
+	err = conn.Connect()
+	if eventError != nil {
+		return "", eventError
+	}
+	if done {
+		return token, nil
+	}
+	return token, err
 }
 
 func askCreds() (token string, err error) {

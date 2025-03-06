@@ -11,10 +11,10 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/pikvm/kvmd-cloud/cmd/kvmd-cloud/ctl_server"
+	"github.com/pikvm/kvmd-cloud/internal/agent"
 	"github.com/pikvm/kvmd-cloud/internal/config"
 	"github.com/pikvm/kvmd-cloud/internal/config/vars"
-	ctlserver "github.com/pikvm/kvmd-cloud/internal/ctl/ctlServer"
-	"github.com/pikvm/kvmd-cloud/internal/hive/guard"
 )
 
 func root(rootCmd *cobra.Command, args []string) error {
@@ -37,18 +37,20 @@ func root(rootCmd *cobra.Command, args []string) error {
 		return nil
 	}
 
+	agent := agent.NewAgent()
+
 	group.Go(func() error {
-		err := ctlserver.RunServer(ctx)
+		err := agent.Run(ctx)
 		if err != nil {
-			err = fmt.Errorf("unable to launch ctl server: %w", err)
+			err = fmt.Errorf("unable to launch hive & proxies connections: %w", err)
 		}
 		return err
 	})
 
 	group.Go(func() error {
-		err := guard.Guard(ctx)
+		err := ctl_server.RunServer(ctx, agent)
 		if err != nil {
-			err = fmt.Errorf("unable to launch hive & proxies connections: %w", err)
+			err = fmt.Errorf("unable to launch ctl server: %w", err)
 		}
 		return err
 	})

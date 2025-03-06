@@ -21,7 +21,7 @@ type Config struct {
 		// Key  string `json:"key" mapstructure:"key"`
 	} `json:"ssl" mapstructure:"ssl"`
 	Hive struct {
-		Endpoints []string `json:"endpoints" mapstructure:"endpoints"`
+		Endpoint string `json:"endpoint" mapstructure:"endpoints"`
 	} `json:"hive" mapstructure:"hive"`
 	UnixCtlSocket string `json:"unix_ctl_socket" mapstructure:"unix_ctl_socket"`
 	Log           struct {
@@ -33,7 +33,7 @@ type Config struct {
 
 var DefaultConfig = map[string]interface{}{
 	"unix_ctl_socket": "/run/kvmd/cloud-ctl.sock",
-	"hive.endpoints":  []string{"pikvm.cloud:9000"},
+	"hive.endpoint":   "https://pikvm.cloud",
 	"log.level":       "info",
 	"log.file":        "-",
 	"log.trace":       false,
