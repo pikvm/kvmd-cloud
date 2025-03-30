@@ -156,7 +156,7 @@ dump-all:
 
 .PHONY: modsync
 modsync:
-	go get -u all
+	go get -u ./...
 	go mod tidy
 	go mod vendor
 

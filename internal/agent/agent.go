@@ -105,6 +105,7 @@ func getAvailableProxies(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	r.Header.Set("Authorization", "Bearer "+config.Cfg.AuthToken)
 	resp, err := httpc.Do(r)
 	if err != nil {
 		return nil, err

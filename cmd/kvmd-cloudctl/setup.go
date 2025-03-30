@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -17,13 +18,10 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/tmaxmax/go-sse"
 	"golang.org/x/term"
-	"google.golang.org/protobuf/types/known/emptypb"
 	"gopkg.in/yaml.v3"
 
 	"github.com/pikvm/cloud-api/api_models"
-	hiveagent_pb "github.com/pikvm/cloud-api/proto/hiveagent"
 	"github.com/pikvm/kvmd-cloud/internal/config"
-	"github.com/pikvm/kvmd-cloud/internal/hive"
 )
 
 const (
@@ -52,7 +50,7 @@ func Setup(cmd *cobra.Command, args []string) error {
 	config.Cfg.AuthToken = token
 
 	logrus.Info("Performing a cloud connection attempt...")
-	info, err := tryAuthorize(cmd.Context())
+	me, err := whoami(cmd.Context(), token)
 	if err != nil {
 		return fmt.Errorf("authorization failed: %w", err)
 	}
@@ -63,44 +61,38 @@ func Setup(cmd *cobra.Command, args []string) error {
 	}
 	logrus.Info("Authorization information saved")
 
-	httpRouters := info.GetRouters().GetHttpRouters()
 	var nginxAffected bool = false
-	if len(httpRouters) == 0 {
-		logrus.Warnf("No http routers found. Skipping letsencrypt setup")
-	} else {
-		fqdn := httpRouters[0].GetFqdn()
-		logrus.Info("Preparing http configuration for letsencrypt...")
-		if err := os.WriteFile(nginxFilepath, nginxHttpContent, 0644); err != nil {
-			return fmt.Errorf("unable to write nginx configuration: %w", err)
-		}
-		if err := launchCmd([]string{"systemctl", "restart", "kvmd-nginx"}); err != nil {
-			return fmt.Errorf("unable to restart nginx: %w", err)
-		}
-		if err := launchCmd([]string{"systemctl", "enable", "--now", "kvmd-cloud"}); err != nil {
-			return fmt.Errorf("unable to start kvmd-cloud agent: %w", err)
-		}
-		logrus.Info("Requesting letsencrypt SSL certificate...")
-		if err := launchCmd([]string{
-			"kvmd-certbot", "certonly_webroot", "--agree-tos", "-n",
-			"--email", info.GetUser().GetEmail(),
-			"-d", fqdn,
-		}); err != nil {
-			return fmt.Errorf("unable to get certificate: %w", err)
-		}
-		nginxAffected = true
-		defer func() { restoreNginx(nginxAffected) }()
-		if err := os.WriteFile(nginxFilepath, nginxHttpsContent, 0664); err != nil {
-			return fmt.Errorf("unable to write nginx configuration: %w", err)
-		}
-		if err := launchCmd([]string{"kvmd-certbot", "install_cloud", fqdn}); err != nil {
-			return fmt.Errorf("unable to install certificate: %w", err)
-		}
-		if err := launchCmd([]string{"systemctl", "enable", "--now", "kvmd-certbot.timer"}); err != nil {
-			return fmt.Errorf("unable to install certificate: %w", err)
-		}
-
-		logrus.Info("Your system is accessible externally via https://" + fqdn)
+	logrus.Info("Preparing http configuration for letsencrypt...")
+	if err := os.WriteFile(nginxFilepath, nginxHttpContent, 0644); err != nil {
+		return fmt.Errorf("unable to write nginx configuration: %w", err)
 	}
+	if err := launchCmd([]string{"systemctl", "restart", "kvmd-nginx"}); err != nil {
+		return fmt.Errorf("unable to restart nginx: %w", err)
+	}
+	if err := launchCmd([]string{"systemctl", "enable", "--now", "kvmd-cloud"}); err != nil {
+		return fmt.Errorf("unable to start kvmd-cloud agent: %w", err)
+	}
+	logrus.Info("Requesting letsencrypt SSL certificate...")
+	if err := launchCmd([]string{
+		"kvmd-certbot", "certonly_webroot", "--agree-tos", "-n",
+		"--email", me.User.Email,
+		"-d", me.DefaultFqdn,
+	}); err != nil {
+		return fmt.Errorf("unable to get certificate: %w", err)
+	}
+	nginxAffected = true
+	defer func() { restoreNginx(nginxAffected) }()
+	if err := os.WriteFile(nginxFilepath, nginxHttpsContent, 0664); err != nil {
+		return fmt.Errorf("unable to write nginx configuration: %w", err)
+	}
+	if err := launchCmd([]string{"kvmd-certbot", "install_cloud", me.DefaultFqdn}); err != nil {
+		return fmt.Errorf("unable to install certificate: %w", err)
+	}
+	if err := launchCmd([]string{"systemctl", "enable", "--now", "kvmd-certbot.timer"}); err != nil {
+		return fmt.Errorf("unable to install certificate: %w", err)
+	}
+
+	logrus.Info("Your system is accessible externally via https://" + me.DefaultFqdn)
 
 	logrus.Info("Done. Please, ensure that you password is strong enough")
 
@@ -197,18 +189,41 @@ func askCreds() (token string, err error) {
 	return
 }
 
-func tryAuthorize(ctx context.Context) (*hiveagent_pb.AgentInfo, error) {
-	authCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	conn, err := hive.Dial(authCtx)
+func whoami(ctx context.Context, token string) (*api_models.WhoamiResult, error) {
+	httpc := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+	url, err := url.JoinPath(config.Cfg.Hive.Endpoint, "/api/agent/whoami")
 	if err != nil {
 		return nil, err
 	}
-	info, err := conn.Client.WhoAmI(authCtx, &emptypb.Empty{})
+	r, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	if err != nil {
 		return nil, err
 	}
-	return info, nil
+	r.Header.Set("Authorization", "Bearer "+token)
+	resp, err := httpc.Do(r)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	me := &api_models.WhoamiResult{}
+	var responseModel api_models.ResponseModel
+	responseModel.Result = me
+	if err := json.Unmarshal(respBytes, &responseModel); err != nil {
+		return nil, err
+	}
+	if responseModel.Error != nil {
+		return nil, responseModel.Error.ToDomainError()
+	}
+
+	return me, nil
 }
 
 func saveAuthData() error {
