@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"math/rand/v2"
 	"net/http"
@@ -80,7 +81,7 @@ func (a *Agent) Serve(ctx context.Context) error {
 func getProxyEndpoint(ctx context.Context) (string, error) {
 	endpoints, err := getAvailableProxies(ctx)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("unable to get available proxies: %w", err)
 	}
 	if len(endpoints) == 0 {
 		return "", domain_errors.ErrNoProxiesAvailable
@@ -97,7 +98,7 @@ func getAvailableProxies(ctx context.Context) ([]string, error) {
 	httpc := &http.Client{
 		Timeout: 5 * time.Second,
 	}
-	url, err := url.JoinPath(config.Cfg.Hive.Endpoint, "/api/agent/available_proxies")
+	url, err := url.JoinPath(config.Cfg.Hive.Endpoint, "/api/agents/get_available_proxies")
 	if err != nil {
 		return nil, err
 	}
@@ -117,14 +118,13 @@ func getAvailableProxies(ctx context.Context) ([]string, error) {
 		return nil, err
 	}
 
-	var availableProxies api_models.AvailableProxies
-	var responseModel api_models.ResponseModel
-	responseModel.Result = availableProxies
-	if err := json.Unmarshal(respBytes, &responseModel); err != nil {
+	availableProxies := api_models.AvailableProxies{}
+	response := api_models.ResponseModel{Result: &availableProxies}
+	if err := json.Unmarshal(respBytes, &response); err != nil {
 		return nil, err
 	}
-	if responseModel.Error != nil {
-		return nil, responseModel.Error.ToDomainError()
+	if response.Error != nil {
+		return nil, response.Error.ToDomainError()
 	}
 
 	endpoints := make([]string, len(availableProxies.Proxies))

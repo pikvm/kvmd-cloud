@@ -95,7 +95,7 @@ func onOpen(ctx context.Context, conn *xrpc.RpcConn) (context.Context, error) {
 }
 
 func onClosed(ctx context.Context, conn *xrpc.RpcConn, closeError error) {
-	logrus.Debugf("connection to proxy %s lost", conn.RemoteAddr().String())
+	logrus.WithError(closeError).Debugf("connection to proxy %s lost", conn.RemoteAddr().String())
 }
 
 func onLog(logContext *xrpc.LogContext, err error, msg string) {
