@@ -5,12 +5,14 @@ import (
 	"crypto/tls"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -25,11 +27,14 @@ import (
 )
 
 const (
-	authFilepath          = "/etc/kvmd/cloud/auth.yaml"
-	nginxFilepath         = "/etc/kvmd/cloud/nginx.ctx-http.conf"
-	baseDomain            = "pikvm.cloud"
 	authCheckUrl          = "https://localhost/api/auth/check"
 	checkPasswordsWikiUrl = "https://docs.pikvm.org/first_steps/#getting-access-to-pikvm"
+)
+
+var (
+	authFilepath  = "/etc/kvmd/cloud/auth.yaml"
+	nginxFilepath = "/etc/kvmd/cloud/nginx.ctx-http.conf"
+	envishere     = false // envishere is a dev marker
 )
 
 //go:embed configs/nginx.http.conf
@@ -39,8 +44,10 @@ var nginxHttpContent []byte
 var nginxHttpsContent []byte
 
 func Setup(cmd *cobra.Command, args []string) error {
-	if err := checkLocalAuth(); err != nil {
-		return fmt.Errorf("local kvmd auth check failed: %w", err)
+	if !envishere {
+		if err := checkLocalAuth(); err != nil {
+			return fmt.Errorf("local kvmd auth check failed: %w", err)
+		}
 	}
 
 	token, err := obtainCreds(cmd.Context())
@@ -54,12 +61,16 @@ func Setup(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("authorization failed: %w", err)
 	}
-	logrus.Info("Authorization successful")
+	logrus.Infof("Authorization successful. My name: %s/%s", me.User.Name, me.Name)
 
 	if err := saveAuthData(); err != nil {
 		return fmt.Errorf("unable to save authorization data: %w", err)
 	}
 	logrus.Info("Authorization information saved")
+
+	if envishere {
+		return nil
+	}
 
 	var nginxAffected bool = false
 	logrus.Info("Preparing http configuration for letsencrypt...")
@@ -124,7 +135,8 @@ func obtainCreds(ctx context.Context) (string, error) {
 }
 
 func browserAuth(ctx context.Context) (string, error) {
-	url, err := url.JoinPath(config.Cfg.Hive.Endpoint, "/agent/bootstrap")
+	logrus.Info("Obtaining bootstrap URL")
+	url, err := url.JoinPath(config.Cfg.Hive.Endpoint, "/api/agents/bootstrap")
 	if err != nil {
 		return "", err
 	}
@@ -134,40 +146,60 @@ func browserAuth(ctx context.Context) (string, error) {
 	var done bool
 	var eventError error
 
-	r, err := http.NewRequestWithContext(ctx, "GET", url, http.NoBody)
+	r, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	if err != nil {
 		return "", err
 	}
 	conn := sse.NewConnection(r)
+	failedEvent := ""
 
 	conn.SubscribeEvent("redirect", func(e sse.Event) {
 		redirect := api_models.BootstrapRedirect{}
-		err := json.Unmarshal([]byte(e.Data), &redirect)
+		resp := api_models.ResponseModel{Result: &redirect}
+		err := json.Unmarshal([]byte(e.Data), &resp)
+		if err == nil && resp.Error != nil {
+			err = errors.New(resp.Error.Error())
+		}
 		if err != nil {
 			eventError = err
+			failedEvent = "redirect"
 			cancel()
 			return
 		}
+		logrus.WithField("payload", redirect).Debug("received redirect event")
 		fmt.Printf("Please, open the following URL in your browser and follow instructions: %s\n", redirect.RedirectURL)
 	})
 
 	conn.SubscribeEvent("result", func(e sse.Event) {
 		result := api_models.BootstrapResult{}
-		err := json.Unmarshal([]byte(e.Data), &result)
+		resp := api_models.ResponseModel{Result: &result}
+		err := json.Unmarshal([]byte(e.Data), &resp)
+		if err == nil && resp.Error != nil {
+			err = errors.New(resp.Error.Error())
+		}
 		if err != nil {
 			eventError = err
+			failedEvent = "result"
 			cancel()
 			return
 		}
+		logrus.WithField("payload", result).Debug("received result event")
 		token = result.AuthToken
 		done = true
 		cancel()
 	})
 
 	err = conn.Connect()
-	if eventError != nil {
-		return "", eventError
+	if errors.Is(err, context.Canceled) {
+		err = nil
 	}
+	if eventError != nil {
+		logrus.WithError(eventError).WithField("url", url).WithField("failed_event", failedEvent).Error("event error")
+		return "", eventError
+	} else if err != nil {
+		logrus.WithError(err).WithField("url", url).Error("connection error")
+	}
+
 	if done {
 		return token, nil
 	}
@@ -193,7 +225,7 @@ func whoami(ctx context.Context, token string) (*api_models.WhoamiResult, error)
 	httpc := &http.Client{
 		Timeout: 5 * time.Second,
 	}
-	url, err := url.JoinPath(config.Cfg.Hive.Endpoint, "/api/agent/whoami")
+	url, err := url.JoinPath(config.Cfg.Hive.Endpoint, "/api/agents/whoami")
 	if err != nil {
 		return nil, err
 	}
@@ -214,13 +246,12 @@ func whoami(ctx context.Context, token string) (*api_models.WhoamiResult, error)
 	}
 
 	me := &api_models.WhoamiResult{}
-	var responseModel api_models.ResponseModel
-	responseModel.Result = me
-	if err := json.Unmarshal(respBytes, &responseModel); err != nil {
+	response := api_models.ResponseModel{Result: me}
+	if err := json.Unmarshal(respBytes, &response); err != nil {
 		return nil, err
 	}
-	if responseModel.Error != nil {
-		return nil, responseModel.Error.ToDomainError()
+	if response.Error != nil {
+		return nil, errors.New(response.Error.Error())
 	}
 
 	return me, nil
@@ -234,6 +265,9 @@ func saveAuthData() error {
 	}
 	out, err := yaml.Marshal(&authFileContent)
 	if err != nil {
+		return err
+	}
+	if err = os.MkdirAll(filepath.Dir(authFilepath), 0755); err != nil {
 		return err
 	}
 	if err = os.WriteFile(authFilepath, out, 0644); err != nil {

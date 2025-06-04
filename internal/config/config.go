@@ -21,7 +21,7 @@ type Config struct {
 		// Key  string `json:"key" mapstructure:"key"`
 	} `json:"ssl" mapstructure:"ssl"`
 	Hive struct {
-		Endpoint string `json:"endpoint" mapstructure:"endpoints"`
+		Endpoint string `json:"endpoint" mapstructure:"endpoint"`
 	} `json:"hive" mapstructure:"hive"`
 	UnixCtlSocket string `json:"unix_ctl_socket" mapstructure:"unix_ctl_socket"`
 	Log           struct {
