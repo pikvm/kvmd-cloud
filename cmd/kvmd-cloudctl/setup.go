@@ -18,11 +18,11 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"github.com/tmaxmax/go-sse"
 	"golang.org/x/term"
 	"gopkg.in/yaml.v3"
 
 	"github.com/pikvm/cloud-api/api_models"
+	"github.com/pikvm/cloud-api/domain_errors"
 	"github.com/pikvm/kvmd-cloud/internal/config"
 )
 
@@ -136,74 +136,78 @@ func obtainCreds(ctx context.Context) (string, error) {
 
 func browserAuth(ctx context.Context) (string, error) {
 	logrus.Info("Obtaining bootstrap URL")
-	url, err := url.JoinPath(config.Cfg.Hive.Endpoint, "/api/agents/bootstrap")
+	reqUrl, err := url.JoinPath(config.Cfg.Hive.Endpoint, "/api/agents/bootstrap")
 	if err != nil {
 		return "", err
 	}
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	var token string
-	var done bool
-	var eventError error
 
-	r, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
+	r, err := http.NewRequestWithContext(ctx, http.MethodGet, reqUrl, http.NoBody)
 	if err != nil {
 		return "", err
 	}
-	conn := sse.NewConnection(r)
-	failedEvent := ""
 
-	conn.SubscribeEvent("redirect", func(e sse.Event) {
-		redirect := api_models.BootstrapRedirect{}
-		resp := api_models.ResponseModel{Result: &redirect}
-		err := json.Unmarshal([]byte(e.Data), &resp)
-		if err == nil && resp.Error != nil {
-			err = errors.New(resp.Error.Error())
-		}
-		if err != nil {
-			eventError = err
-			failedEvent = "redirect"
-			cancel()
-			return
-		}
-		logrus.WithField("payload", redirect).Debug("received redirect event")
-		fmt.Printf("Please, open the following URL in your browser and follow instructions: %s\n", redirect.RedirectURL)
-	})
-
-	conn.SubscribeEvent("result", func(e sse.Event) {
-		result := api_models.BootstrapResult{}
-		resp := api_models.ResponseModel{Result: &result}
-		err := json.Unmarshal([]byte(e.Data), &resp)
-		if err == nil && resp.Error != nil {
-			err = errors.New(resp.Error.Error())
-		}
-		if err != nil {
-			eventError = err
-			failedEvent = "result"
-			cancel()
-			return
-		}
-		logrus.WithField("payload", result).Debug("received result event")
-		token = result.AuthToken
-		done = true
-		cancel()
-	})
-
-	err = conn.Connect()
-	if errors.Is(err, context.Canceled) {
-		err = nil
+	redirectResp, err := http.DefaultClient.Do(r)
+	if err != nil {
+		return "", err
 	}
-	if eventError != nil {
-		logrus.WithError(eventError).WithField("url", url).WithField("failed_event", failedEvent).Error("event error")
-		return "", eventError
-	} else if err != nil {
-		logrus.WithError(err).WithField("url", url).Error("connection error")
+	defer redirectResp.Body.Close()
+	respBytes, err := io.ReadAll(redirectResp.Body)
+	if err != nil {
+		return "", err
 	}
 
-	if done {
-		return token, nil
+	redirect := &api_models.BootstrapRedirect{}
+	response := api_models.ResponseModel{Result: redirect}
+	if err := json.Unmarshal(respBytes, &response); err != nil {
+		return "", err
 	}
-	return token, err
+	if response.Error != nil {
+		return "", errors.New(response.Error.Error())
+	}
+
+	logrus.WithField("payload", redirect).Debug("received redirect event")
+	fmt.Printf("Please, open the following URL in your browser and follow instructions: %s\n", redirect.RedirectURL)
+
+	reqUrl, err = url.JoinPath(config.Cfg.Hive.Endpoint, "/api/agents/bootstrap/", redirect.BootstrapToken)
+	if err != nil {
+		return "", err
+	}
+	r, err = http.NewRequestWithContext(ctx, http.MethodGet, reqUrl, http.NoBody)
+	if err != nil {
+		return "", err
+	}
+
+	resultResp, err := http.DefaultClient.Do(r)
+	if err != nil {
+		logrus.WithError(err).Error("failed to complete bootstrap request")
+		return "", err
+	}
+	defer resultResp.Body.Close()
+	respBytes, err = io.ReadAll(resultResp.Body)
+	if err != nil {
+		logrus.WithError(err).Error("failed to read bootstrap completion response")
+		return "", err
+	}
+
+	println(string(respBytes))
+
+	result := &api_models.BootstrapResult{}
+	response = api_models.ResponseModel{Result: result}
+	if err := json.Unmarshal(respBytes, &response); err != nil {
+		logrus.WithError(err).Error("failed to parse bootstrap completion response")
+		return "", err
+	}
+	if response.Error != nil {
+		err = response.Error.ToDomainError()
+		if errors.Is(err, domain_errors.ErrSessionExpired) {
+			logrus.Error("Authorization couldn't complete in time. Please, try again or input authorization token manually.")
+		} else {
+			logrus.WithError(err).Error("Failed to bootstrap agent")
+		}
+		return "", err
+	}
+
+	return result.AuthToken, nil
 }
 
 func askCreds() (token string, err error) {
