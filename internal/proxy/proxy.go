@@ -90,12 +90,12 @@ func Dial(ctx context.Context, proxyEndpoint string) (*ProxyConnection, error) {
 }
 
 func onOpen(ctx context.Context, conn *xrpc.RpcConn) (context.Context, error) {
-	logrus.Debugf("connected to proxy %s", conn.RemoteAddr().String())
+	logrus.Infof("connected to proxy %s", conn.RemoteAddr().String())
 	return nil, nil
 }
 
 func onClosed(ctx context.Context, conn *xrpc.RpcConn, closeError error) {
-	logrus.WithError(closeError).Debugf("connection to proxy %s lost", conn.RemoteAddr().String())
+	logrus.WithError(closeError).Infof("connection to proxy %s lost", conn.RemoteAddr().String())
 }
 
 func onLog(logContext *xrpc.LogContext, err error, msg string) {

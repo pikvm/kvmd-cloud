@@ -30,7 +30,6 @@ func RunServer(ctx context.Context, agent *agent.Agent) error {
 	srv := &http.Server{
 		Handler: r,
 	}
-	logrus.Warn(config.Cfg.UnixCtlSocket)
 	unixListener, err := net.Listen("unix", config.Cfg.UnixCtlSocket)
 	if err != nil {
 		return err
