@@ -50,10 +50,20 @@ func Setup(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	token, err := obtainCreds(cmd.Context())
+	askToken, _ := cmd.Flags().GetBool("ask-token")
+
+	var token string = ""
+	var err error = nil
+	if !askToken {
+		token, err = browserAuth(cmd.Context())
+	}
+	if err != nil || token == "" {
+		token, err = askCreds()
+	}
 	if err != nil {
 		return err
 	}
+
 	config.Cfg.AuthToken = token
 
 	logrus.Info("Performing a cloud connection attempt...")
@@ -121,17 +131,6 @@ func launchCmd(cmdParts []string) error {
 		return fmt.Errorf("command execution error: %w", err)
 	}
 	return nil
-}
-
-func obtainCreds(ctx context.Context) (string, error) {
-	token, err := browserAuth(ctx)
-	if err != nil || token == "" {
-		token, err = askCreds()
-		if err != nil {
-			return "", err
-		}
-	}
-	return token, nil
 }
 
 func browserAuth(ctx context.Context) (string, error) {
@@ -211,9 +210,7 @@ func browserAuth(ctx context.Context) (string, error) {
 }
 
 func askCreds() (token string, err error) {
-	fmt.Println("Input authorization data:")
-
-	fmt.Print("Authorization token: ")
+	fmt.Print("Input authorization token: ")
 	var b []byte
 	b, err = term.ReadPassword(int(syscall.Stdin))
 	fmt.Println()

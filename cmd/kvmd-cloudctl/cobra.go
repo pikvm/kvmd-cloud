@@ -29,6 +29,10 @@ var setupCmd = cobra.Command{
 	RunE:  Setup,
 }
 
+func init() {
+	setupCmd.Flags().Bool("ask-token", false, "Ask for token interactively. Do not perform automatic token bootstrapping")
+}
+
 func buildCobra() (*cobra.Command, map[string]*pflag.Flag, error) {
 	// 	rootCmd.PersistentFlags().String(
 	// 		"unixCtlSocket",

@@ -14,6 +14,10 @@ var rootCmd = cobra.Command{
 	SilenceErrors: true,
 }
 
+func init() {
+	rootCmd.Flags().Bool("run", false, "Run kvmd-cloud. Without this flag agent won't start")
+}
+
 func buildCobra() (*cobra.Command, map[string]*pflag.Flag, error) {
 	return &rootCmd, nil, nil
 }
