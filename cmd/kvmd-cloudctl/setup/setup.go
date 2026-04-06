@@ -32,9 +32,7 @@ const (
 )
 
 var (
-	authFilepath  = "/etc/kvmd/cloud/auth.yaml"
 	nginxFilepath = "/etc/kvmd/cloud/nginx.ctx-http.conf"
-	envishere     = false // envishere is a dev marker
 )
 
 //go:embed configs/nginx.http.conf
@@ -42,6 +40,12 @@ var nginxHttpContent []byte
 
 //go:embed configs/nginx.http-and-https.conf
 var nginxHttpsContent []byte
+
+func init() {
+	if config.EnvIsHere {
+		nginxFilepath = ".env/nginx.ctx-http.conf"
+	}
+}
 
 func BuildCommand() *cli.Command {
 	return &cli.Command{
@@ -55,6 +59,11 @@ func BuildCommand() *cli.Command {
 			&cli.BoolFlag{
 				Name:   "skip-local-auth-check",
 				Usage:  "Skip local authorization check. Use it only if you know what you are doing (e.g. for development or if you have a custom setup with disabled local auth)",
+				Hidden: true,
+			},
+			&cli.BoolFlag{
+				Name:   "skip-cert-setup",
+				Usage:  "Skip SSL certificate setup. Use it only if you know what you are doing (e.g. for development or if you have a custom setup with disabled SSL)",
 				Hidden: true,
 			},
 		},
@@ -77,9 +86,15 @@ func Setup(ctx context.Context, cmd *cli.Command) error {
 	var err error = nil
 	if !askToken {
 		token, err = browserAuth(ctx)
+		if err != nil {
+			logger.Err(err).Msg("Browser authentication failed, falling back to token input")
+		}
 	}
 	if err != nil || token == "" {
-		token, err = askCreds()
+		token, err = askCreds(ctx)
+		if ctx.Err() != nil {
+			return nil
+		}
 	}
 	if err != nil {
 		return err
@@ -99,7 +114,8 @@ func Setup(ctx context.Context, cmd *cli.Command) error {
 	}
 	logger.Info().Msg("Authorization information saved")
 
-	if envishere {
+	if cmd.Bool("skip-cert-setup") {
+		logger.Info().Msg("Skipping certificate setup as requested. Make sure to set up SSL certificate for your system manually, otherwise your system won't be accessible externally and cloud features won't work")
 		return nil
 	}
 
@@ -158,6 +174,7 @@ func browserAuth(ctx context.Context) (string, error) {
 	logger := log.Logger
 
 	logger.Info().Msg("Obtaining bootstrap URL")
+	logger.Debug().Msgf("Bootstrap request endpoint: %s", config.Cfg.Hive.Endpoint)
 	reqUrl, err := url.JoinPath(config.Cfg.Hive.Endpoint, "/api/agents/bootstrap")
 	if err != nil {
 		return "", err
@@ -232,8 +249,17 @@ func browserAuth(ctx context.Context) (string, error) {
 	return result.AuthToken, nil
 }
 
-func askCreds() (token string, err error) {
+func askCreds(ctx context.Context) (token string, err error) {
 	fmt.Print("Input authorization token: ")
+	finishCh := make(chan struct{})
+	defer close(finishCh)
+	go func() {
+		select {
+		case <-ctx.Done():
+			os.Exit(1)
+		case <-finishCh:
+		}
+	}()
 	var b []byte
 	b, err = term.ReadPassword(int(syscall.Stdin))
 	fmt.Println()
@@ -291,10 +317,10 @@ func saveAuthData() error {
 	if err != nil {
 		return err
 	}
-	if err = os.MkdirAll(filepath.Dir(authFilepath), 0755); err != nil {
+	if err = os.MkdirAll(filepath.Dir(config.AuthFilepath), 0755); err != nil {
 		return err
 	}
-	if err = os.WriteFile(authFilepath, out, 0644); err != nil {
+	if err = os.WriteFile(config.AuthFilepath, out, 0644); err != nil {
 		return err
 	}
 	return nil

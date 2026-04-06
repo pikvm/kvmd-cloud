@@ -3,7 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
-	"slices"
+	"os"
 
 	"github.com/pikvm/kvmd-cloud/internal/config/vars"
 )
@@ -16,20 +16,24 @@ type ConfigFile struct {
 const ExtractConfigNode = ""
 
 var (
-	ConfigFiles = []ConfigFile{
-		{Path: "/etc/kvmd/cloud/main.yaml", MustExist: true},
-		{Path: "/etc/kvmd/cloud/override.yaml", MustExist: false},
-		{Path: "/etc/kvmd/cloud/auth.yaml", MustExist: true},
-	}
+	ConfigFiles  = []ConfigFile{}
+	AuthFilepath = ""
+	EnvIsHere    = false
 )
 
 func init() {
-	if vars.Debug {
-		ConfigFiles = slices.Insert(ConfigFiles, 0, ConfigFile{Path: ".env/main.yaml", MustExist: false})
-		for cfgN := range ConfigFiles {
-			ConfigFiles[cfgN].MustExist = false
-		}
+	if s, err := os.Stat(".env"); err == nil && s.IsDir() {
+		EnvIsHere = true
 	}
+	if _, err := os.Stat(".env/main.yaml"); vars.Debug && err == nil {
+		AuthFilepath = ".env/auth.yaml"
+		ConfigFiles = append(ConfigFiles, ConfigFile{Path: ".env/main.yaml", MustExist: false})
+	} else {
+		AuthFilepath = "/etc/kvmd/cloud/auth.yaml"
+		ConfigFiles = append(ConfigFiles, ConfigFile{Path: "/etc/kvmd/cloud/main.yaml", MustExist: true})
+		ConfigFiles = append(ConfigFiles, ConfigFile{Path: "/etc/kvmd/cloud/override.yaml", MustExist: false})
+	}
+	ConfigFiles = append(ConfigFiles, ConfigFile{Path: AuthFilepath, MustExist: false})
 }
 
 type Config struct {

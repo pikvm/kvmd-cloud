@@ -73,18 +73,19 @@ func GetGlobalFlags() []cli.Flag {
 	}
 }
 
-func flagsMerger(delim string, strict bool) func(src, dest map[string]any) error {
+func flagsMerger(cmd *cli.Command, delim string, strict bool) func(src, dest map[string]any) error {
 	return func(src, dest map[string]any) error {
 		// cliflagv3.Provider produces a map tree with top-level single key.
 		// We need to remove that top-level key and merge the subtree with the dest map.
-		flat, paths := maps.Flatten(src, nil, delim)
+		srcFlat, _ := maps.Flatten(src, nil, delim)
 		destFlat, _ := maps.Flatten(dest, nil, delim)
 		newFlat := make(map[string]any)
-		newPaths := make(map[string][]string)
-		rootKeys := make(map[string]struct{})
-		for path, value := range flat {
-			rootKeys[paths[path][0]] = struct{}{}
-			newPath := strings.TrimPrefix(path, paths[path][0]+delim)
+		prefix := cmd.Name + delim
+		for path, value := range srcFlat {
+			if !strings.HasPrefix(path, prefix) {
+				return fmt.Errorf("Unexpected CLI flag path '%s', expected to start with '%s'", path, prefix)
+			}
+			newPath := strings.TrimPrefix(path, prefix)
 
 			// Filter out flags that are not part of the config
 			if _, ok := destFlat[newPath]; !ok {
@@ -92,10 +93,6 @@ func flagsMerger(delim string, strict bool) func(src, dest map[string]any) error
 			}
 
 			newFlat[newPath] = value
-			newPaths[newPath] = paths[path][1:]
-		}
-		if len(rootKeys) > 1 {
-			return fmt.Errorf("Unexpected number of root CLI commands %d > 1", len(rootKeys))
 		}
 		unflat := maps.Unflatten(newFlat, delim)
 		if strict {

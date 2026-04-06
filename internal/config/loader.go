@@ -74,7 +74,7 @@ func LoadConfig(cmd *cli.Command) {
 	}
 
 	const FLAGS_DELIM = "-"
-	mergerOpts = []koanf.Option{koanf.WithMergeFunc(flagsMerger(FLAGS_DELIM, strict))}
+	mergerOpts = []koanf.Option{koanf.WithMergeFunc(flagsMerger(cmd, FLAGS_DELIM, strict))}
 	if err := k.Load(cliflagv3.Provider(cmd, FLAGS_DELIM), nil, mergerOpts...); err != nil {
 		log.Fatal().Err(err).Msg("Unable to load CLI flags")
 		return
