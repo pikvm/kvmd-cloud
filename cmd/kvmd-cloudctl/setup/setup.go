@@ -1,4 +1,4 @@
-package main
+package setup
 
 import (
 	"context"
@@ -16,8 +16,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
+	"github.com/rs/zerolog/log"
+	"github.com/urfave/cli/v3"
 	"golang.org/x/term"
 	"gopkg.in/yaml.v3"
 
@@ -43,19 +43,40 @@ var nginxHttpContent []byte
 //go:embed configs/nginx.http-and-https.conf
 var nginxHttpsContent []byte
 
-func Setup(cmd *cobra.Command, args []string) error {
-	if !envishere {
+func BuildCommand() *cli.Command {
+	return &cli.Command{
+		Name:  "setup",
+		Usage: "Perform the initial setup and authorization of kvmd-cloud agent",
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:  "ask-token",
+				Usage: "Prompt for a token instead of using browser authentication",
+			},
+			&cli.BoolFlag{
+				Name:   "skip-local-auth-check",
+				Usage:  "Skip local authorization check. Use it only if you know what you are doing (e.g. for development or if you have a custom setup with disabled local auth)",
+				Hidden: true,
+			},
+		},
+		Action: Setup,
+	}
+}
+
+func Setup(ctx context.Context, cmd *cli.Command) error {
+	logger := log.Logger
+
+	if !cmd.Bool("skip-local-auth-check") {
 		if err := checkLocalAuth(); err != nil {
 			return fmt.Errorf("local kvmd auth check failed: %w", err)
 		}
 	}
 
-	askToken, _ := cmd.Flags().GetBool("ask-token")
+	askToken := cmd.Bool("ask-token")
 
 	var token string = ""
 	var err error = nil
 	if !askToken {
-		token, err = browserAuth(cmd.Context())
+		token, err = browserAuth(ctx)
 	}
 	if err != nil || token == "" {
 		token, err = askCreds()
@@ -66,24 +87,24 @@ func Setup(cmd *cobra.Command, args []string) error {
 
 	config.Cfg.AuthToken = token
 
-	logrus.Info("Performing a cloud connection attempt...")
-	me, err := whoami(cmd.Context(), token)
+	logger.Info().Msg("Performing a cloud connection attempt...")
+	me, err := whoami(ctx, token)
 	if err != nil {
 		return fmt.Errorf("authorization failed: %w", err)
 	}
-	logrus.Infof("Authorization successful. My name: %s/%s", me.User.Name, me.Name)
+	logger.Info().Msgf("Authorization successful. My name: %s/%s", me.User.Name, me.Name)
 
 	if err := saveAuthData(); err != nil {
 		return fmt.Errorf("unable to save authorization data: %w", err)
 	}
-	logrus.Info("Authorization information saved")
+	logger.Info().Msg("Authorization information saved")
 
 	if envishere {
 		return nil
 	}
 
 	var nginxAffected bool = false
-	logrus.Info("Preparing http configuration for letsencrypt...")
+	logger.Info().Msg("Preparing http configuration for letsencrypt...")
 	if err := os.WriteFile(nginxFilepath, nginxHttpContent, 0644); err != nil {
 		return fmt.Errorf("unable to write nginx configuration: %w", err)
 	}
@@ -93,7 +114,7 @@ func Setup(cmd *cobra.Command, args []string) error {
 	if err := launchCmd([]string{"systemctl", "enable", "--now", "kvmd-cloud"}); err != nil {
 		return fmt.Errorf("unable to start kvmd-cloud agent: %w", err)
 	}
-	logrus.Info("Requesting letsencrypt SSL certificate...")
+	logger.Info().Msg("Requesting letsencrypt SSL certificate...")
 	if err := launchCmd([]string{
 		"kvmd-certbot", "certonly_webroot", "--agree-tos", "-n",
 		"--email", me.User.Email,
@@ -113,9 +134,9 @@ func Setup(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("unable to install certificate: %w", err)
 	}
 
-	logrus.Info("Your system is accessible externally via https://" + me.DefaultFqdn)
+	logger.Info().Msg("Your system is accessible externally via https://" + me.DefaultFqdn)
 
-	logrus.Info("Done. Please, ensure that you password is strong enough")
+	logger.Info().Msg("Done. Please, ensure that you password is strong enough")
 
 	nginxAffected = false
 	return nil
@@ -134,7 +155,9 @@ func launchCmd(cmdParts []string) error {
 }
 
 func browserAuth(ctx context.Context) (string, error) {
-	logrus.Info("Obtaining bootstrap URL")
+	logger := log.Logger
+
+	logger.Info().Msg("Obtaining bootstrap URL")
 	reqUrl, err := url.JoinPath(config.Cfg.Hive.Endpoint, "/api/agents/bootstrap")
 	if err != nil {
 		return "", err
@@ -164,7 +187,7 @@ func browserAuth(ctx context.Context) (string, error) {
 		return "", errors.New(response.Error.Error())
 	}
 
-	logrus.WithField("payload", redirect).Debug("received redirect event")
+	logger.Debug().Interface("payload", redirect).Msg("received redirect event")
 	fmt.Printf("Please, open the following URL in your browser and follow instructions: %s\n", redirect.RedirectURL)
 
 	reqUrl, err = url.JoinPath(config.Cfg.Hive.Endpoint, "/api/agents/bootstrap/", redirect.BootstrapToken)
@@ -178,13 +201,13 @@ func browserAuth(ctx context.Context) (string, error) {
 
 	resultResp, err := http.DefaultClient.Do(r)
 	if err != nil {
-		logrus.WithError(err).Error("failed to complete bootstrap request")
+		logger.Err(err).Msg("failed to complete bootstrap request")
 		return "", err
 	}
 	defer resultResp.Body.Close()
 	respBytes, err = io.ReadAll(resultResp.Body)
 	if err != nil {
-		logrus.WithError(err).Error("failed to read bootstrap completion response")
+		logger.Err(err).Msg("failed to read bootstrap completion response")
 		return "", err
 	}
 
@@ -193,15 +216,15 @@ func browserAuth(ctx context.Context) (string, error) {
 	result := &api_models.BootstrapResult{}
 	response = api_models.ResponseModel{Result: result}
 	if err := json.Unmarshal(respBytes, &response); err != nil {
-		logrus.WithError(err).Error("failed to parse bootstrap completion response")
+		logger.Err(err).Msg("failed to parse bootstrap completion response")
 		return "", err
 	}
 	if response.Error != nil {
 		err = response.Error.ToDomainError()
 		if errors.Is(err, domain_errors.ErrSessionExpired) {
-			logrus.Error("Authorization couldn't complete in time. Please, try again or input authorization token manually.")
+			logger.Error().Msg("Authorization couldn't complete in time. Please, try again or input authorization token manually.")
 		} else {
-			logrus.WithError(err).Error("Failed to bootstrap agent")
+			logger.Error().Err(err).Msg("Failed to bootstrap agent")
 		}
 		return "", err
 	}
@@ -291,7 +314,6 @@ func checkLocalAuth() error {
 	}
 	res, err := client.Do(req)
 	if err != nil {
-		fmt.Printf("%#v", err)
 		return err
 	}
 	res.Body.Close()
@@ -319,16 +341,18 @@ func checkLocalAuth() error {
 }
 
 func restoreNginx(nginxAffected bool) {
+	logger := log.Logger
+
 	if !nginxAffected {
 		return
 	}
-	logrus.Info("Reverting nginx http configuration for letsencrypt...")
+	logger.Info().Msg("Reverting nginx http configuration for letsencrypt...")
 	if err := os.WriteFile(nginxFilepath, nginxHttpContent, 0644); err != nil {
-		logrus.WithError(err).Error("unable to write nginx configuration")
+		logger.Err(err).Msg("unable to write nginx configuration")
 		return
 	}
 	if err := launchCmd([]string{"systemctl", "restart", "kvmd-nginx"}); err != nil {
-		logrus.WithError(err).Error("unable to restart nginx")
+		logger.Err(err).Msg("unable to restart nginx")
 		return
 	}
 }

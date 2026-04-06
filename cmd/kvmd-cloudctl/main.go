@@ -6,47 +6,41 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/pikvm/kvmd-cloud/cmd/kvmd-cloudctl/ctl_client"
+	"github.com/pikvm/kvmd-cloud/cmd/kvmd-cloudctl/setup"
 	"github.com/pikvm/kvmd-cloud/internal/config"
-	"github.com/pikvm/kvmd-cloud/internal/config/vars"
-	"github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
+	"github.com/urfave/cli/v3"
 )
 
 func main() {
-	var err error
-	defer func() {
-		if !vars.Debug {
-			if panicErr := recover(); panicErr != nil {
-				logrus.Error(panicErr)
-				os.Exit(1)
-			}
-		}
-
-		if err != nil {
-			logrus.Error(err)
-			os.Exit(1)
-		}
-	}()
-
-	rootCmd, err := config.Initialize(buildCobra)
-	if err != nil {
-		return
-	}
-
 	ctx, cancel := signal.NotifyContext(
 		context.Background(),
 		os.Interrupt, syscall.SIGINT, syscall.SIGTERM,
 	)
 	defer cancel()
 
-	done := make(chan struct{})
-	defer close(done)
-	go func() {
-		select {
-		case <-ctx.Done():
-			os.Exit(1)
-		case <-done:
-			return
-		}
-	}()
-	err = rootCmd.ExecuteContext(ctx)
+	config.InitBootstrapLogger()
+
+	rootCmd := &cli.Command{
+		Flags:                  config.GetGlobalFlags(),
+		UseShortOptionHandling: true,
+		Commands:               subCommands(),
+		Before: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
+			config.LoadConfig(cmd)
+			return ctx, nil
+		},
+	}
+
+	if err := rootCmd.Run(ctx, os.Args); err != nil {
+		log.Fatal().Err(err).Msg("Failed to run command")
+		return
+	}
+}
+
+func subCommands() []*cli.Command {
+	return []*cli.Command{
+		ctl_client.BuildStatusCommand(),
+		setup.BuildCommand(),
+	}
 }

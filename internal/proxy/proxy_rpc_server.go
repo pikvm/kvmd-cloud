@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -9,34 +8,38 @@ import (
 	"syscall"
 
 	proxyagent_pb "github.com/pikvm/cloud-api/proto/proxyagent"
-	"github.com/sirupsen/logrus"
+	"github.com/rs/zerolog"
 	"github.com/xornet-sl/go-xrpc/xrpc"
 )
 
 type ProxyServer struct {
-	ctx context.Context
+	proxyConnection *ProxyConnection
 	proxyagent_pb.UnimplementedAgentForProxyServer
 }
 
 func (this *ProxyServer) ConnectionChannel(stream proxyagent_pb.AgentForProxy_ConnectionChannelServer) error {
+	rpcConn := this.proxyConnection.GetRpcConn()
+	if rpcConn == nil {
+		return fmt.Errorf("rpc connection is nil")
+	}
+	logger := zerolog.Ctx(rpcConn.Context())
+
 	msg, err := stream.Recv()
 	if errors.Is(err, xrpc.StreamClosedError) {
 		return nil
 	}
 	if err != nil || msg == nil {
-		logrus.WithError(err).Warnf("error while getting data from proxy")
+		logger.Warn().Err(err).Msg("error while getting data from proxy")
 		return fmt.Errorf("error while getting data from proxy: %w", err)
 	}
 	header := msg.GetHeader()
 	if header == nil {
-		logrus.Warnf("malformed stream header")
+		logger.Warn().Msg("malformed stream header")
 		return fmt.Errorf("malformed stream header")
 	}
 	cid := header.GetCid()
 	connectTo := header.GetConnectTo()
-	logFields := logrus.Fields{
-		"cid": cid,
-	}
+	cidLogger := logger.With().Str("cid", cid).Logger()
 
 	var conn net.Conn
 	if connectTo[0] == '/' {
@@ -58,8 +61,8 @@ func (this *ProxyServer) ConnectionChannel(stream proxyagent_pb.AgentForProxy_Co
 		return nil
 	}
 
-	logrus.WithFields(logFields).Debug("Connection created")
-	defer logrus.WithFields(logFields).Debug("Connection closed")
+	cidLogger.Debug().Msg("Connection created")
+	defer cidLogger.Debug().Msg("Connection closed")
 	defer conn.Close()
 
 	senderError := make(chan error)
@@ -72,22 +75,22 @@ func (this *ProxyServer) ConnectionChannel(stream proxyagent_pb.AgentForProxy_Co
 			msg, err := stream.Recv()
 			if isNetConnClosedErr(err) || errors.Is(err, xrpc.StreamClosedError) {
 				// Connection closed on proxy's side
-				logrus.WithFields(logFields).Trace("proxy->inner rpc read closed")
+				cidLogger.Trace().Msg("proxy->inner rpc read closed")
 				conn.Close()
 				return
 			}
 			if err != nil {
-				logrus.WithFields(logFields).WithError(err).Errorf("error while getting data from proxy")
+				cidLogger.Err(err).Msg("error while getting data from proxy")
 				conn.Close()
 				senderError <- err
 				return
 			}
 			chunk := msg.GetChunk()
-			logrus.WithFields(logFields).Tracef("proxy->inner rpc received %d bytes", len(chunk))
+			cidLogger.Trace().Msgf("proxy->inner rpc received %d bytes", len(chunk))
 			n, err := conn.Write(chunk)
-			logrus.WithFields(logFields).Tracef("inner written %d bytes", n)
+			cidLogger.Trace().Msgf("inner written %d bytes", n)
 			if err != nil {
-				logrus.WithFields(logFields).WithError(err).Errorf("unable to send data to inner connection")
+				cidLogger.Err(err).Msg("unable to send data to inner connection")
 				conn.Close()
 				// apiHandler.Notify(apiHandler.Ctx, "connectionClosed", connection.Cid)
 				senderError <- err
@@ -100,8 +103,12 @@ func (this *ProxyServer) ConnectionChannel(stream proxyagent_pb.AgentForProxy_Co
 		defer close(receiverError)
 		readCloserChan := make(chan struct{})
 		go func() {
+			connCtx := this.proxyConnection.GetRpcConn().Context()
+			if connCtx == nil {
+				return
+			}
 			select {
-			case <-this.ctx.Done():
+			case <-connCtx.Done():
 				conn.Close()
 				return
 			case <-readCloserChan:
@@ -112,11 +119,11 @@ func (this *ProxyServer) ConnectionChannel(stream proxyagent_pb.AgentForProxy_Co
 		buff := make([]byte, 8192)
 		for {
 			n, err := conn.Read(buff)
-			logrus.WithFields(logFields).WithError(err).Tracef("inner read: %d bytes", n)
+			cidLogger.Trace().Msgf("inner read: %d bytes", n)
 			if isNetConnClosedErr(err) {
 				return
 			} else if err != nil {
-				logrus.WithFields(logFields).WithError(err).Errorf("error reading from inner connection")
+				cidLogger.Err(err).Msg("error reading from inner connection")
 				conn.Close()
 				receiverError <- err
 				return
@@ -127,22 +134,26 @@ func (this *ProxyServer) ConnectionChannel(stream proxyagent_pb.AgentForProxy_Co
 				},
 			})
 			if errors.Is(err, xrpc.StreamClosedError) {
-				logrus.WithFields(logFields).WithError(err).Tracef("inner->proxy rpc send closed")
+				cidLogger.Trace().Msg("inner->proxy rpc send closed")
 				conn.Close()
 				return
 			}
 			if err != nil {
-				logrus.WithFields(logFields).WithError(err).Errorf("unable to send data to proxy")
+				cidLogger.Err(err).Msg("unable to send data to proxy")
 				conn.Close()
 				receiverError <- err
 				return
 			}
-			logrus.WithFields(logFields).Tracef("inner->proxy rpc sent %d bytes", n)
+			cidLogger.Trace().Msgf("inner->proxy rpc sent %d bytes", n)
 		}
 	}()
 
+	proxyConn := this.proxyConnection.GetRpcConn().Context()
+	if proxyConn == nil {
+		return nil
+	}
 	select {
-	case <-this.ctx.Done():
+	case <-proxyConn.Done():
 		return nil
 	case err := <-senderError:
 		return err

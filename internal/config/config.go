@@ -3,106 +3,81 @@ package config
 import (
 	"encoding/json"
 	"fmt"
-
-	"github.com/xornet-sl/xcommon"
+	"slices"
 
 	"github.com/pikvm/kvmd-cloud/internal/config/vars"
-	log "github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 )
 
+type ConfigFile struct {
+	Path      string
+	MustExist bool
+}
+
+const ExtractConfigNode = ""
+
+var (
+	ConfigFiles = []ConfigFile{
+		{Path: "/etc/kvmd/cloud/main.yaml", MustExist: true},
+		{Path: "/etc/kvmd/cloud/override.yaml", MustExist: false},
+		{Path: "/etc/kvmd/cloud/auth.yaml", MustExist: true},
+	}
+)
+
+func init() {
+	if vars.Debug {
+		ConfigFiles = slices.Insert(ConfigFiles, 0, ConfigFile{Path: ".env/main.yaml", MustExist: false})
+		for cfgN := range ConfigFiles {
+			ConfigFiles[cfgN].MustExist = false
+		}
+	}
+}
+
 type Config struct {
-	AuthToken string `json:"auth_token" mapstructure:"auth_token"`
-	NoSSL     bool   `json:"nossl" mapstructure:"nossl"`
-	SSL       struct {
-		Ca string `json:"ca" mapstructure:"ca"`
-		// Cert string `json:"cert" mapstructure:"cert"`
-		// Key  string `json:"key" mapstructure:"key"`
-	} `json:"ssl" mapstructure:"ssl"`
-	Hive struct {
-		Endpoint string `json:"endpoint" mapstructure:"endpoint"`
-	} `json:"hive" mapstructure:"hive"`
-	UnixCtlSocket string `json:"unix_ctl_socket" mapstructure:"unix_ctl_socket"`
-	Log           struct {
-		Level string `json:"level" mapstructure:"level"`
-		File  string `json:"file" mapstructure:"file"`
-		Trace bool   `json:"trace" mapstructure:"trace"`
-	} `json:"log" mapstructure:"log"`
+	AuthToken     string            `json:"auth_token" mapstructure:"auth_token"`
+	NoSSL         bool              `json:"nossl" mapstructure:"nossl"`
+	SSL           SSLConfigSection  `json:"ssl" mapstructure:"ssl"`
+	Hive          HiveConfigSection `json:"hive" mapstructure:"hive"`
+	UnixCtlSocket string            `json:"unix_ctl_socket" mapstructure:"unix_ctl_socket"`
+	Log           LogConfigSection  `json:"log" mapstructure:"log"`
 }
 
-var DefaultConfig = map[string]interface{}{
-	"unix_ctl_socket": "/run/kvmd/cloud-ctl.sock",
-	"hive.endpoint":   "https://pikvm.cloud",
-	"log.level":       "info",
-	"log.file":        "-",
-	"log.trace":       false,
+type SSLConfigSection struct {
+	Ca string `json:"ca" mapstructure:"ca"`
+	// Cert string `json:"cert" mapstructure:"cert"`
+	// Key  string `json:"key" mapstructure:"key"`
 }
 
-var Cfg *Config = nil
-var ConfigurationResult *xcommon.ConfigurationResult = nil
+type HiveConfigSection struct {
+	Endpoint string `json:"endpoint" mapstructure:"endpoint"`
+}
 
-var ConfigPlan = xcommon.ConfigurePlan{
-	ConfigParsingRules: xcommon.ViperConfig{
-		SearchDirs:  []string{vars.BaseConfigDir},
-		SearchFiles: []string{vars.MainConfigName, vars.AuthConfigName},
+type LogConfigSection struct {
+	Level  string    `json:"level" mapstructure:"level"`
+	File   string    `json:"file" mapstructure:"file"`
+	Tee    bool      `json:"tee" mapstructure:"tee"`
+	Format LogFormat `json:"format" mapstructure:"format"`
+	Trace  bool      `json:"trace" mapstructure:"trace"`
+}
+
+var DefConfig = Config{
+	Hive: HiveConfigSection{
+		Endpoint: "https://pikvm.cloud",
+	},
+	UnixCtlSocket: "/run/kvmd/cloud-ctl.sock",
+	Log: LogConfigSection{
+		Level:  "info",
+		File:   "-",
+		Format: LogFormatText,
 	},
 }
 
-func Initialize(cobraBuilder xcommon.CobraBuilderFunc) (*cobra.Command, error) {
-	// Enable early logging
-	lvl := "info"
-	if vars.Debug {
-		lvl = "debug"
-	}
-	if err := xcommon.SetInitialLogger(lvl, "-", false); err != nil {
-		log.WithError(err).Warn("Unable to set up initial logger properly")
-	}
-
-	rootCmd, bindFlags, err := cobraBuilder()
-	if err != nil {
-		return nil, err
-	}
-	if bindFlags == nil {
-		bindFlags = make(map[string]*pflag.Flag)
-	}
-	amendWithCommonFlags(rootCmd, bindFlags)
-
-	return xcommon.InitCobra(
-		func() (*cobra.Command, map[string]*pflag.Flag, error) {
-			return rootCmd, bindFlags, nil
-		},
-		&ConfigPlan,
-		DefaultConfig,
-		&Cfg,
-		&ConfigurationResult,
-		configureLogger,
-	)
-}
-
-func amendWithCommonFlags(rootCmd *cobra.Command, bindFlags map[string]*pflag.Flag) {
-	flagset := getGlobalFlags()
-	rootCmd.PersistentFlags().AddFlagSet(flagset)
-	rootCmd.PersistentFlags().VisitAll(func(f *pflag.Flag) {
-		if flagset.Lookup(f.Name) != nil {
-			bindFlags[f.Name] = f
-		}
-	})
-}
-
-func configureLogger() {
-	if err := xcommon.SetInitialLogger(Cfg.Log.Level, Cfg.Log.File, Cfg.Log.Trace); err != nil {
-		log.WithError(err).Error("Unable to set up logger properly")
-	}
-	if len(ConfigurationResult.ParsedConfigs) > 0 {
-		log.Debugf("Configurations loaded successfully: %v", ConfigurationResult.ParsedConfigs)
-	} else {
-		log.Warn("No configuration found")
-	}
-}
+var Cfg *Config = nil
 
 func DumpConfig() error {
-	s, _ := json.MarshalIndent(Cfg, "", "  ")
+	s, err := json.MarshalIndent(Cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
 	fmt.Println(string(s))
 	return nil
 }

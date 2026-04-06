@@ -1,15 +1,27 @@
 package ctl_client
 
 import (
-	"github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
+	"context"
+
+	"github.com/rs/zerolog/log"
+	"github.com/urfave/cli/v3"
 
 	"github.com/pikvm/kvmd-cloud/internal/ctl"
 )
 
-func RequestStatus(cmd *cobra.Command, args []string) error {
+func BuildStatusCommand() *cli.Command {
+	return &cli.Command{
+		Name:   "status",
+		Usage:  "kvmd-cloud status",
+		Action: RequestStatus,
+	}
+}
+
+func RequestStatus(ctx context.Context, cmd *cli.Command) error {
+	logger := log.Logger
+
 	var status ctl.ApplicationStatusResponse
-	err := DoUnixRequestJSON(cmd.Context(), "GET", "/status", nil, &status)
-	logrus.Infof("%+v", status)
+	err := DoUnixRequestJSON(ctx, "GET", "/status", nil, &status)
+	logger.Info().Msgf("%+v", status)
 	return err
 }
